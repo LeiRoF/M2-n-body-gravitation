@@ -1,17 +1,36 @@
 program nbody
     implicit none
 
-    INTEGER, PARAMETER :: N = 1000, MAX_TENTATIVES = 1000
-    INTEGER            :: tentatives = 0
-    INTEGER            :: i
-    REAL               :: PI = 3.14159
-    REAL               :: x, y, z, r, phi, theta
-    REAL, DIMENSION(N) :: x_L, y_L, z_L, r_L, phi_L, theta_L
-    real               :: vx, vy, vz, vr, vphi, vtheta
-    real, DIMENSION(N) :: vx_L, vy_L, vz_L, vr_L, vphi_L, vtheta_L
+    ! Safe to edit
+    INTEGER, PARAMETER         :: N = 1000 ! number of bodies
+    integer, parameter         :: steps = 1000 ! simulation time in steps
+    real, parameter            :: dt = 0.01 ! time step in seconds
+
+    ! Don't touch to that, you fool!
+    integer                    :: MAX_TENTATIVES = 1000
+    INTEGER                    :: tentatives = 0
+    INTEGER                    :: i, t, tmp = -1
+    REAL                       :: PI
+    REAL                       :: x, y, z
+    real                       :: vx, vy, vz
+    real, dimension(steps,N,3) :: p, v, a
+    real, dimension(N)         :: m
+
+    PI = 4*ATAN(1.)
+
+    !--------------------
+    ! Initial conditions
+    !--------------------
+
+    m = 1
 
     ! generating n objects
     do i= 1, N
+
+        if (i * 100 / N .ne. tmp) then
+            tmp = i * 100 / N
+            print *, "Generating initial conditions ", tmp, "%"
+        end if
 
         ! generating random coordinate
         call random_coord_in_sphere(x,y,z)
@@ -19,7 +38,8 @@ program nbody
         if (i > 1) then
 
             ! if the coordinate is to near from another one, retry
-            do while ((is_too_near_from_another(x, y, z, x_L, y_L, z_L, i) .eqv. .true.) .and. (tentatives < MAX_TENTATIVES))
+            do while ((is_too_near_from_another(x, y, z, p(1, :, 1), p(1, :, 2), p(1, :, 3), i) .eqv. .true.) &
+            .and. (tentatives < MAX_TENTATIVES))
 
                 tentatives = tentatives + 1
                 call random_coord_in_sphere(x,y,z)
@@ -27,29 +47,62 @@ program nbody
             end do
         end if
 
+        ! storing the data
+        p(1, i, 1) = x  
+        p(1, i, 2) = y
+        p(1, i, 3) = z
+
         ! highly complex computation of object velocity
         ! assumption to compute it: angular velocity around z axes with constant value = 1
+        v(1, i, 1) = -y
+        v(1, i, 2) = x
+        v(1, i, 3) = 0
 
-        vx = -y
-        vy = x
-        vz = 0
+        ! setting default acceleration to 0
+        a(1, i, 1) = 0
+        a(1, i, 2) = 0
+        a(1, i, 3) = 0
 
-        ! storing the data
-
-        x_L(i) = x  
-        y_L(i) = y
-        z_L(i) = z
-
-        vx_L(i) = vx
-        vy_L(i) = vy
-        vz_L(i) = vz
     end do
 
-    ! saving the data in a file
+    !--------------------
+    ! Time evolution
+    !--------------------
+
+    do t=1,steps-1
+    
+        if (t * 100 / steps .ne. tmp) then
+            tmp = t * 100 / steps
+            print *, "Computing evolution ", tmp, "%"
+        end if
+
+        call next_state(p, v, a, t, m, dt, N, steps)
+    end do
+
+    !--------------------
+    ! Export results
+    !--------------------
+
     open(42, file='nbody.txt', status='replace')
-    do i= 1, N
-        write(42, *) x_L(i), y_L(i), z_L(i), vx_L(i), vy_L(i), vz_L(i)
+
+    write(42, *) "# p_x     p_y     p_z     v_x     v_y     v_z     a_x     a_y     a_z"
+
+    do t = 1, steps
+        write(42, *) " "
+        write(42, *) "# t = ", t*dt
+
+        do i = 1, N
+            write(42, *) p(t,i,:), v(t,i,:), a(t,i,:)
+        end do
     end do
+
+    close(42)
+
+    open(42, file='parameters.txt', status='replace')
+
+    write(42, *) "# N     steps     dt"
+    write(42, *) N, steps, dt
+
     close(42)
 
     ! ====================================================================================================
@@ -62,8 +115,8 @@ program nbody
         ! generate a random cartesian coordinate in a sphere of radius 1
 
         subroutine random_coord_in_sphere(x,y,z)
-            real    :: x, y, z
-            logical :: lock
+            real, intent(  out) :: x, y, z
+            logical             :: lock
 
             lock = .true.
             do while (lock .eqv. .true.)
@@ -85,8 +138,8 @@ program nbody
         ! Subroutine to convert from spherical to cartesian coordinates
 
         subroutine spherical_to_cartesian(r, phi, theta, x, y, z)
-            REAL, INTENT(IN)    :: r, phi, theta
-            REAL, INTENT(OUT)   :: x, y, z
+            real, intent(in   ) :: r, phi, theta
+            real, intent(  out) :: x, y, z
 
             x = r * SIN(phi) * COS(theta)
             y = r * SIN(phi) * SIN(theta)
@@ -98,12 +151,12 @@ program nbody
         ! Function that ensure the new object will not appear too near from another one
 
         function is_too_near_from_another(x, y, z, x_L, y_L, z_L, N)
-            integer             :: N
-            real                :: volume, distance, eps
-            real                :: PI = 3.14159
-            real                :: x,y,z
-            real, dimension(N)  :: x_L, y_L, z_L
-            logical             :: is_too_near_from_another
+            integer, intent(in   )               :: N
+            real,    intent(in   )               :: x,y,z
+            real,    intent(in   ), dimension(N) :: x_L, y_L, z_L
+            logical                              :: is_too_near_from_another
+            real                                 :: volume, distance, eps
+            real                                 :: PI = 3.14159
 
             is_too_near_from_another = .false.
             return
@@ -130,5 +183,103 @@ program nbody
             is_too_near_from_another = .false.
 
         end function is_too_near_from_another
+
+        !----------------------------------------------------------------------------------------------------
+        ! Computing next position, speed and acceleration using leap frog algorithm
+
+        subroutine next_state(p, v, a, t, m, dt, N, steps)
+            real,    intent(inout), dimension(steps, N, 3) :: p, v, a ! time t
+            integer, intent(in   )                         :: t ! step
+            real,    intent(in   ), dimension(N)           :: m 
+            integer, intent(in   )                         :: N, steps
+            real,    intent(in   )                         :: dt
+            real,                   dimension(N,3)         :: tmp_p, tmp_v, tmp_a ! time t+1/2
+            real                                           :: G = 1.0, eps = 0.05
+            integer                                        :: i, j
+
+            ! print *, " "
+            ! print *, " "
+            ! print *, " "
+            ! print *, "--------------------------------------------------"
+
+            ! print *, "dt = ", dt, "dt/2 = ", dt/2.
+            ! print *, "m = ", m(:)
+
+            ! print *, " "
+            ! print *, "p(t) = "
+            ! do i=1,n
+            !     print *, p(t, i, :)
+            ! end do
+            ! print *, "v(t) = "
+            ! do i=1,n
+            !     print *, v(t, i, :)
+            ! end do
+
+            ! Compute p at i + 1/2
+            do i=1,N
+                tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
+            end do
+
+            ! print *, " "
+            ! print *, "p(t+1/2) = "
+            ! do i=1,n
+            !     print *, tmp_p(i, :)
+            ! end do
+
+            ! Compute a at i+1/2
+            do i=1,N
+                do j=1,N
+                    if (i .ne. j) then
+                        tmp_a(i,:) = G * m(j) * (tmp_p(j,:) - tmp_p(i,:)) / norm2(tmp_p(j,:) - tmp_p(i,:) + eps)**3
+                        ! tmp_a(i, :) = G * m(j) / sqrt(sum((tmp_p(i, :) - tmp_p(j, :))**2))
+                    end if
+                end do
+            end do
+
+            ! print *, " "
+            ! print *, "a(t+1/2) = "
+            ! do i=1,n
+            !     print *, tmp_a(i, :)
+            ! end do
+
+            ! Compute v at i+1
+            do i=1,N
+                v(t+1, i, :) = v(t, i, :) + tmp_a(i, :) * dt
+            end do
+
+            ! print *, " "
+            ! print *, "v(t+1) = "
+            ! do i=1,n
+            !     print *, v(t+1, i, :)
+            ! end do
+
+            ! Compute p at i+1
+            do i=1,N
+                p(t+1, i, :) = tmp_p(i, :) + tmp_v(i, :) * dt/2.
+            end do
+
+            ! print *, " "
+            ! print *, "p(t+1) = "
+            ! do i=1,n
+            !     print *, p(t+1, i, :)
+            ! end do
+
+            ! Compute a at i+1
+            do i=1,N
+                do j=1,N
+                    if (i .ne. j) then
+                        a(t+1, i, :) = G * m(j) * (p(t+1, j, :) - p(t+1, i, :)) / norm2(p(t+1, j, :) - p(t+1, i, :) + eps)**3
+                        ! a(t+1, i, :) = - G * m(j) / sqrt(sum((p(t+1, i, :) - p(t+1, j, :))**2))
+                    end if
+                end do
+            end do
+
+            ! print *, " "
+            ! print *, "a(t+1) = "
+            ! do i=1,n
+            !     print *, a(t+1, i, :)
+            ! end do
+
+        end subroutine next_state
 
 end program nbody
