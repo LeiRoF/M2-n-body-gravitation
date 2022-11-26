@@ -1,6 +1,6 @@
 import os
-# os.system("gfortran -fno-backtrace .\main.f90 -o main.exe")
-# os.system("main.exe")
+os.system("gfortran -fno-backtrace .\main.f90 -o main.exe")
+os.system("main.exe")
 
 import matplotlib.pyplot as plt
 import numpy as np

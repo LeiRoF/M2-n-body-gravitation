@@ -194,8 +194,10 @@ program nbody
             integer, intent(in   )                         :: N, steps
             real,    intent(in   )                         :: dt
             real,                   dimension(N,3)         :: tmp_p, tmp_v, tmp_a ! time t+1/2
+            real,                   dimension(3)           :: dist
+            integer,                dimension(3)           :: sign
             real                                           :: G = 1.0, eps = 0.05
-            integer                                        :: i, j
+            integer                                        :: i, j, k
 
             ! print *, " "
             ! print *, " "
@@ -215,10 +217,15 @@ program nbody
             !     print *, v(t, i, :)
             ! end do
 
+            
+            !OMP PARALLEL DO SHARE(tmp_p)
+
             ! Compute p at i + 1/2
             do i=1,N
                 tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
             end do
+
+            !OMP END PARALLEL DO
 
             ! print *, " "
             ! print *, "p(t+1/2) = "
@@ -226,15 +233,30 @@ program nbody
             !     print *, tmp_p(i, :)
             ! end do
 
+            !OMP PARALLEL DO private(dist,sign,j,m,eps,G, tmp_p) shared(tmp_a)
+
             ! Compute a at i+1/2
             do i=1,N
                 do j=1,N
                     if (i .ne. j) then
-                        tmp_a(i,:) = G * m(j) * (tmp_p(j,:) - tmp_p(i,:)) / norm2(tmp_p(j,:) - tmp_p(i,:) + eps)**3
-                        ! tmp_a(i, :) = G * m(j) / sqrt(sum((tmp_p(i, :) - tmp_p(j, :))**2))
+
+                        ! Computing distance between i and j
+                        dist = tmp_p(j,:) - tmp_p(i,:)
+
+                        sign = 1
+                        do k=1,3
+                            if (dist(k) < 0) then
+                                sign(k) = -1
+                            end if
+                        end do
+
+                        ! Ending computing acceleration
+                        tmp_a(i,:) = sign * G * m(j) / (dist * dist + eps)
                     end if
                 end do
             end do
+
+            !OMP END PARALLEL DO
 
             ! print *, " "
             ! print *, "a(t+1/2) = "
@@ -242,10 +264,14 @@ program nbody
             !     print *, tmp_a(i, :)
             ! end do
 
+            !OMP PARALLEL DO SHARE(v)
+
             ! Compute v at i+1
             do i=1,N
                 v(t+1, i, :) = v(t, i, :) + tmp_a(i, :) * dt
             end do
+
+            !OMP END PARALLEL DO
 
             ! print *, " "
             ! print *, "v(t+1) = "
@@ -253,10 +279,14 @@ program nbody
             !     print *, v(t+1, i, :)
             ! end do
 
+            !OMP PARALLEL DO SHARE(p)
+
             ! Compute p at i+1
             do i=1,N
                 p(t+1, i, :) = tmp_p(i, :) + tmp_v(i, :) * dt/2.
             end do
+
+            !OMP END PARALLEL DO
 
             ! print *, " "
             ! print *, "p(t+1) = "
@@ -264,15 +294,31 @@ program nbody
             !     print *, p(t+1, i, :)
             ! end do
 
+            !OMP PARALLEL DO private(dist,sign,j,m,eps,G, p) shared(a)
+
             ! Compute a at i+1
             do i=1,N
                 do j=1,N
                     if (i .ne. j) then
-                        a(t+1, i, :) = G * m(j) * (p(t+1, j, :) - p(t+1, i, :)) / norm2(p(t+1, j, :) - p(t+1, i, :) + eps)**3
-                        ! a(t+1, i, :) = - G * m(j) / sqrt(sum((p(t+1, i, :) - p(t+1, j, :))**2))
+
+                        ! Computing distance between i and j
+                        dist = p(t+1, j, :) - p(t+1, i, :)
+
+                        sign = 1
+                        do k=1,3
+                            if (dist(k) < 0) then
+                                sign(k) = -1
+                            end if
+                        end do
+
+                        ! Ending computing acceleration
+                        a(t+1, i, :) = sign * G * m(j) / (dist * dist + eps)
+
                     end if
                 end do
             end do
+
+            !OMP END PARALLEL DO
 
             ! print *, " "
             ! print *, "a(t+1) = "
