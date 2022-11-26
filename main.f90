@@ -2,9 +2,9 @@ program nbody
     implicit none
 
     ! Safe to edit
-    INTEGER, PARAMETER         :: N = 1000 ! number of bodies
+    INTEGER, PARAMETER         :: N = 100 ! number of bodies
     integer, parameter         :: steps = 1000 ! simulation time in steps
-    real, parameter            :: dt = 0.01 ! time step in seconds
+    real, parameter            :: dt = 0.001 ! time step in seconds
 
     ! Don't touch to that, you fool!
     integer                    :: MAX_TENTATIVES = 1000
@@ -196,7 +196,6 @@ program nbody
             real,                   dimension(N,3)         :: tmp_p, tmp_v, tmp_a ! time t+1/2
             real,                   dimension(3)           :: dist
             integer,                dimension(3)           :: sign
-            real                                           :: G = 1.0, eps = 0.05
             integer                                        :: i, j, k
 
             ! print *, " "
@@ -218,7 +217,7 @@ program nbody
             ! end do
 
             
-            !OMP PARALLEL DO SHARE(tmp_p)
+            !fromage SHARE(tmp_p)
 
             ! Compute p at i + 1/2
             do i=1,N
@@ -233,27 +232,11 @@ program nbody
             !     print *, tmp_p(i, :)
             ! end do
 
-            !OMP PARALLEL DO private(dist,sign,j,m,eps,G, tmp_p) shared(tmp_a)
+            !fromage private(dist,sign,j,m,tmp_p) shared(tmp_a)
 
             ! Compute a at i+1/2
             do i=1,N
-                do j=1,N
-                    if (i .ne. j) then
-
-                        ! Computing distance between i and j
-                        dist = tmp_p(j,:) - tmp_p(i,:)
-
-                        sign = 1
-                        do k=1,3
-                            if (dist(k) < 0) then
-                                sign(k) = -1
-                            end if
-                        end do
-
-                        ! Ending computing acceleration
-                        tmp_a(i,:) = sign * G * m(j) / (dist * dist + eps)
-                    end if
-                end do
+                call acceleration(tmp_p(:, :), m, i, tmp_a(i, :), N)
             end do
 
             !OMP END PARALLEL DO
@@ -264,7 +247,7 @@ program nbody
             !     print *, tmp_a(i, :)
             ! end do
 
-            !OMP PARALLEL DO SHARE(v)
+            !fromage SHARE(v)
 
             ! Compute v at i+1
             do i=1,N
@@ -279,7 +262,7 @@ program nbody
             !     print *, v(t+1, i, :)
             ! end do
 
-            !OMP PARALLEL DO SHARE(p)
+            !fromage SHARE(p)
 
             ! Compute p at i+1
             do i=1,N
@@ -294,28 +277,11 @@ program nbody
             !     print *, p(t+1, i, :)
             ! end do
 
-            !OMP PARALLEL DO private(dist,sign,j,m,eps,G, p) shared(a)
+            !fromage private(dist,sign,j,m, p) shared(a)
 
             ! Compute a at i+1
             do i=1,N
-                do j=1,N
-                    if (i .ne. j) then
-
-                        ! Computing distance between i and j
-                        dist = p(t+1, j, :) - p(t+1, i, :)
-
-                        sign = 1
-                        do k=1,3
-                            if (dist(k) < 0) then
-                                sign(k) = -1
-                            end if
-                        end do
-
-                        ! Ending computing acceleration
-                        a(t+1, i, :) = sign * G * m(j) / (dist * dist + eps)
-
-                    end if
-                end do
+                call acceleration(p(t+1, :, :), m, i, a(t+1, i, :), N)
             end do
 
             !OMP END PARALLEL DO
@@ -327,5 +293,55 @@ program nbody
             ! end do
 
         end subroutine next_state
+
+        !----------------------------------------------------------------------------------------------------
+        ! Compute the acceleration of a body considering the position of the others
+
+        subroutine acceleration(p, m, i, a, N)
+            real,    intent(in   ), dimension(N, 3) :: p
+            real,    intent(in   ), dimension(N)    :: m
+            integer, intent(in   )                  :: i, N
+            real,    intent(  out), dimension(3)    :: a
+            real,                   dimension(3)    :: dist
+            integer,                dimension(3)    :: s
+            real                                    :: G = 1.0, eps = 0.05
+            integer                                 :: j, k
+
+            ! print *, "--------------------------------------------------"
+            ! print *, "p_i = ", i, " | ", p(i,:)
+            ! print *, " "
+
+            a(:) = 0
+
+            ! Compute a at i+1
+            do j=1,N
+                if (i .ne. j) then
+                    ! print *, "p_j = ", j, " | ", p(j,:)
+
+                    ! Computing distance between i and j
+                    dist = p(j, :) - p(i, :)
+
+                    ! print *, "d_j = ", j, " | ", dist(:)
+
+                    s = 1
+                    do k=1,3
+                        if (dist(k) < 0) then
+                            s(k) = -1
+                        end if
+                    end do
+
+                    ! print *, "s_j = ", j, " | ", s(:)
+                    ! print *, "a_j = ", j, " | ", s(:) * G * m(j) / (dist(:) * dist(:) + eps)
+                    ! print *, " "
+
+                    ! Computing acceleration
+                    a(:) = a(:) + s(:) * G * m(j) / (dist(:) * dist(:) + eps)                    
+
+                end if
+            end do
+            
+            ! print *, "a = ", a(:)
+
+        end subroutine acceleration
 
 end program nbody
