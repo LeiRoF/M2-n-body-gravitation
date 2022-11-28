@@ -3,18 +3,20 @@ program nbody
 
     ! Safe to edit
     INTEGER, PARAMETER         :: N = 100 ! number of bodies
-    integer, parameter         :: steps = 1000 ! simulation time in steps
-    real, parameter            :: dt = 0.001 ! time step in seconds
+    integer, parameter         :: steps = 100 ! simulation time in steps
+    real, parameter            :: dt = 0.1 ! time step in seconds
 
     ! Don't touch to that, you fool!
     integer                    :: MAX_TENTATIVES = 1000
     INTEGER                    :: tentatives = 0
-    INTEGER                    :: i, t, tmp = -1
-    REAL                       :: PI
+    INTEGER                    :: i,j, t, tmp = -1
+    REAL                       :: PI, tmp2, dist
     REAL                       :: x, y, z
     real                       :: vx, vy, vz
-    real, dimension(steps,N,3) :: p, v, a
+    real, dimension(steps,N,3) :: p=0, v=0, a=0
     real, dimension(N)         :: m
+    real, dimension(steps)     :: Ep, Ec, Et
+    real, dimension(steps,3)   :: b ! barycenter
 
     PI = 4*ATAN(1.)
 
@@ -47,62 +49,105 @@ program nbody
             end do
         end if
 
-        ! storing the data
+        ! Storing the data
         p(1, i, 1) = x  
         p(1, i, 2) = y
         p(1, i, 3) = z
 
-        ! highly complex computation of object velocity
-        ! assumption to compute it: angular velocity around z axes with constant value = 1
+        ! Highly complex computation of object velocity
+        ! Assumption to compute it: angular velocity around z axes with constant value = 1
         v(1, i, 1) = -y
         v(1, i, 2) = x
         v(1, i, 3) = 0
 
-        ! setting default acceleration to 0
-        a(1, i, 1) = 0
-        a(1, i, 2) = 0
-        a(1, i, 3) = 0
-
     end do
+
+    ! do i = 1,N
+    !     ! Computing initial acceleration
+    !     call acceleration(p(1, :, :), m, i, N, a(1, i, :))
+    ! end do
+
+    call barycenter(p(1,:,:), m, N, b(1,:))
+
+    ! Computing energies
+    Ep(1) = potential_energy(p(1,:,:), m, N)
+    Ec(1) = kinetic_energy(v(1,:,:), m, N)
+    Et(1) = Ep(1) + Ec(1)
 
     !--------------------
     ! Time evolution
     !--------------------
 
     do t=1,steps-1
+        print *, "t = ", t
     
+        ! Print progress
         if (t * 100 / steps .ne. tmp) then
             tmp = t * 100 / steps
             print *, "Computing evolution ", tmp, "%"
         end if
 
+        ! Compute particle position, velocity and acceleration at time t+1
         call next_state(p, v, a, t, m, dt, N, steps)
+        call barycenter(p(t+1,:,:), m, N, b(t+1,:))
+
+        do i = 1,N
+            dist = sqrt(sum((p(t,i,:) - p(t+1,i,:))**2))
+            if (dist > 1) then
+                print *, "    i = ", i
+                print *, "        dist = ", dist
+                print *, "        p(t) = ", p(t,i,:), " p(t+1) = ", p(t+1,i,:)
+                print *, "        v(t) = ", v(t,i,:), " v(t+1) = ", v(t+1,i,:)
+                print *, "        a(t) = ", a(t,i,:), " a(t+1) = ", a(t+1,i,:)
+            end if
+        end do
+
+        ! Compute energies at time t+1
+        Ep(t+1) = potential_energy(p(t+1,:,:), m, N)
+        Ec(t+1) = kinetic_energy(v(t+1,:,:), m, N)
+        Et(t+1) = Ep(t+1) + Ec(t+1)
     end do
 
     !--------------------
     ! Export results
     !--------------------
 
+    ! Writing bodies position, velocity and acceleration
+    print *, "Saving bodies data"
     open(42, file='nbody.txt', status='replace')
-
     write(42, *) "# p_x     p_y     p_z     v_x     v_y     v_z     a_x     a_y     a_z"
-
     do t = 1, steps
         write(42, *) " "
-        write(42, *) "# t = ", t*dt
-
+        write(42, *) "# t = ", t*dt, " step = ", t
         do i = 1, N
             write(42, *) p(t,i,:), v(t,i,:), a(t,i,:)
         end do
     end do
-
+    close(42)
+    
+    ! Writing system energies
+    print *, "Saving energies"
+    open(42, file='energies.txt', status='replace')
+    write(42, *) "# t     Ep     Ec     Et     Barycenter"
+    do t = 1, steps
+        write(42, *) t*dt, Ep(t), Ec(t), Et(t), b(t,:)
+    end do
     close(42)
 
+    ! Writing barycenter
+    print *, "Saving energies"
+    open(42, file='barycenter.txt', status='replace')
+    write(42, *) "# t, barycenter"
+    do t = 1, steps
+        write(42, *) t*dt, b(t,:)
+    end do
+    close(42)
+    
+    ! Writing simulationn parameters
+    print *, "Saving simulation parameters"
     open(42, file='parameters.txt', status='replace')
-
     write(42, *) "# N     steps     dt"
     write(42, *) N, steps, dt
-
     close(42)
 
     ! ====================================================================================================
@@ -133,19 +178,6 @@ program nbody
             end do
 
         end subroutine random_coord_in_sphere
-
-        ! ----------------------------------------------------------------------------------------------------
-        ! Subroutine to convert from spherical to cartesian coordinates
-
-        subroutine spherical_to_cartesian(r, phi, theta, x, y, z)
-            real, intent(in   ) :: r, phi, theta
-            real, intent(  out) :: x, y, z
-
-            x = r * SIN(phi) * COS(theta)
-            y = r * SIN(phi) * SIN(theta)
-            z = r * COS(phi)
-
-        end subroutine spherical_to_cartesian
 
         ! ----------------------------------------------------------------------------------------------------
         ! Function that ensure the new object will not appear too near from another one
@@ -188,7 +220,7 @@ program nbody
         ! Computing next position, speed and acceleration using leap frog algorithm
 
         subroutine next_state(p, v, a, t, m, dt, N, steps)
-            real,    intent(inout), dimension(steps, N, 3) :: p, v, a ! time t
+            real,    intent(inout), dimension(steps, N, 3) :: p, v, a ! time t and t+1
             integer, intent(in   )                         :: t ! step
             real,    intent(in   ), dimension(N)           :: m 
             integer, intent(in   )                         :: N, steps
@@ -220,9 +252,9 @@ program nbody
             !fromage SHARE(tmp_p)
 
             ! Compute p at i + 1/2
-            do i=1,N
-                tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
-            end do
+            ! do i=1,N
+            !     tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
+            ! end do
 
             !OMP END PARALLEL DO
 
@@ -235,9 +267,9 @@ program nbody
             !fromage private(dist,sign,j,m,tmp_p) shared(tmp_a)
 
             ! Compute a at i+1/2
-            do i=1,N
-                call acceleration(tmp_p(:, :), m, i, tmp_a(i, :), N)
-            end do
+            ! do i=1,N
+            !     call acceleration(tmp_p(:, :), m, i, N, tmp_a(i, :))
+            ! end do
 
             !OMP END PARALLEL DO
 
@@ -250,8 +282,16 @@ program nbody
             !fromage SHARE(v)
 
             ! Compute v at i+1
+            ! do i=1,N
+            !     v(t+1, i, :) = v(t, i, :) + tmp_a(i, :) * dt
+            ! end do
+            ! do i=1,N
+            !     v(t+1, i, :) = v(t, i, :) + a(t, i, :) * dt
+            ! end do
             do i=1,N
-                v(t+1, i, :) = v(t, i, :) + tmp_a(i, :) * dt
+                v(t+1, i, 1) = - p(t, i, 2)
+                v(t+1, i, 2) = p(t, i, 1)
+                v(t+1, i, 3) = a(t, i, 3)
             end do
 
             !OMP END PARALLEL DO
@@ -265,8 +305,11 @@ program nbody
             !fromage SHARE(p)
 
             ! Compute p at i+1
+            ! do i=1,N
+            !     p(t+1, i, :) = tmp_p(i, :) + tmp_v(i, :) * dt/2.
+            ! end do
             do i=1,N
-                p(t+1, i, :) = tmp_p(i, :) + tmp_v(i, :) * dt/2.
+                p(t+1, i, :) = p(t,i, :) + v(t, i, :) * dt
             end do
 
             !OMP END PARALLEL DO
@@ -280,9 +323,14 @@ program nbody
             !fromage private(dist,sign,j,m, p) shared(a)
 
             ! Compute a at i+1
+            ! do i=1,N
+            !     call acceleration(p(t+1, :, :), m, i, N, a(t+1, i, :))
+            ! end do
             do i=1,N
-                call acceleration(p(t+1, :, :), m, i, a(t+1, i, :), N)
+                call acceleration(p(t+1, :, :), m, i, N, a(t+1, i, :))
             end do
+            a(t+1, i, 1) = 0
+            a(t+1, i, 2) = 0 
 
             !OMP END PARALLEL DO
 
@@ -297,7 +345,7 @@ program nbody
         !----------------------------------------------------------------------------------------------------
         ! Compute the acceleration of a body considering the position of the others
 
-        subroutine acceleration(p, m, i, a, N)
+        subroutine acceleration(p, m, i, N, a)
             real,    intent(in   ), dimension(N, 3) :: p
             real,    intent(in   ), dimension(N)    :: m
             integer, intent(in   )                  :: i, N
@@ -311,31 +359,34 @@ program nbody
             ! print *, "p_i = ", i, " | ", p(i,:)
             ! print *, " "
 
-            a(:) = 0
+            a(:) = 1
 
             ! Compute a at i+1
             do j=1,N
                 if (i .ne. j) then
-                    ! print *, "p_j = ", j, " | ", p(j,:)
+                    a(:) = a(:) + G * m(j) * (p(j,:) - p(i,:)) / (norm2(p(j,:) - p(i,:)) + eps)**(3/2)
+                    
 
-                    ! Computing distance between i and j
-                    dist = p(j, :) - p(i, :)
+                    ! ! print *, "p_j = ", j, " | ", p(j,:)
 
-                    ! print *, "d_j = ", j, " | ", dist(:)
+                    ! ! Computing distance between i and j
+                    ! dist = p(j, :) - p(i, :)
 
-                    s = 1
-                    do k=1,3
-                        if (dist(k) < 0) then
-                            s(k) = -1
-                        end if
-                    end do
+                    ! ! print *, "d_j = ", j, " | ", dist(:)
 
-                    ! print *, "s_j = ", j, " | ", s(:)
-                    ! print *, "a_j = ", j, " | ", s(:) * G * m(j) / (dist(:) * dist(:) + eps)
-                    ! print *, " "
+                    ! s = 1
+                    ! do k=1,3
+                    !     if (dist(k) < 0) then
+                    !         s(k) = -1
+                    !     end if
+                    ! end do
 
-                    ! Computing acceleration
-                    a(:) = a(:) + s(:) * G * m(j) / (dist(:) * dist(:) + eps)                    
+                    ! ! print *, "s_j = ", j, " | ", s(:)
+                    ! ! print *, "a_j = ", j, " | ", s(:) * G * m(j) / (dist(:) * dist(:) + eps)
+                    ! ! print *, " "
+
+                    ! ! Computing acceleration
+                    ! a(:) = a(:) + s(:) * G * m(j) / (dist(:) * dist(:) + eps )  
 
                 end if
             end do
@@ -343,5 +394,71 @@ program nbody
             ! print *, "a = ", a(:)
 
         end subroutine acceleration
+
+        !----------------------------------------------------------------------------------------------------
+        ! Compute the energy of the system
+
+        function potential_energy(p, m, N)
+        
+            real,    intent(in   ), dimension(N, 3) :: p
+            real,    intent(in   ), dimension(N)    :: m
+            integer, intent(in   )                  :: N
+            real,                   dimension(3)    :: a, b
+            real                                    :: potential_energy, G=1
+            real                                    :: dist
+            integer                                 :: i, j, k
+
+            potential_energy = 0
+
+            ! Compute a at i+1
+            do i=1,N
+                call acceleration(p, m, i, N, a)
+                call barycenter(p, m, N, b)
+                potential_energy = potential_energy + sum(m) * sqrt(sum(a**2)) * sqrt(sum((b - p(i,:))**2))
+            end do
+
+        end function potential_energy
+
+        !----------------------------------------------------------------------------------------------------
+        ! Compute the kinetic energy of the system
+
+        function kinetic_energy(v, m, N)
+        
+            real,    intent(in   ), dimension(N, 3) :: v
+            real,    intent(in   ), dimension(N)    :: m
+            integer, intent(in   )                  :: N
+            real                                    :: kinetic_energy
+            integer                                 :: i
+
+            kinetic_energy = 0
+
+            ! Ec = sum on i of 1/2 * m_i * v_i^2
+            do i=1,N
+                kinetic_energy = kinetic_energy + 0.5 * m(i) * sum(v(i, :)**2)
+            end do
+
+        end function kinetic_energy
+
+        !----------------------------------------------------------------------------------------------------
+        ! Get the barycenter
+
+        subroutine barycenter(p, m, N, b)
+        
+            real,    intent(in   ), dimension(N, 3) :: p
+            real,    intent(in   ), dimension(N)    :: m
+            integer, intent(in   )                  :: N
+            real,    intent(  out), dimension(3)    :: b
+            integer                                 :: i
+
+            b = 0
+
+            ! Ec = sum on i of 1/2 * m_i * v_i^2
+            do i=1,N
+                b = b + m(i) * p(i, :)
+            end do
+
+            b = b / sum(m)
+
+        end subroutine barycenter
 
 end program nbody
