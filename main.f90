@@ -2,9 +2,10 @@ program nbody
     implicit none
 
     ! Safe to edit
-    INTEGER, PARAMETER         :: N = 100 ! number of bodies
-    integer, parameter         :: steps = 100 ! simulation time in steps
+    INTEGER, PARAMETER         :: N = 1000 ! number of bodies
+    integer, parameter         :: steps = 1000 ! simulation time in steps
     real, parameter            :: dt = 0.1 ! time step in seconds
+    logical, parameter         :: new_initial_conditions = .false. ! set to .true. to generate new initial conditions
 
     ! Don't touch to that, you fool!
     integer                    :: MAX_TENTATIVES = 1000
@@ -24,52 +25,78 @@ program nbody
     ! Initial conditions
     !--------------------
 
-    m = 1
+    m = 1./N
 
-    ! generating n objects
-    do i= 1, N
+    ! Position
 
-        if (i * 100 / N .ne. tmp) then
-            tmp = i * 100 / N
-            print *, "Generating initial conditions ", tmp, "%"
-        end if
+    if (new_initial_conditions .eqv. .false.) then
+        print *, "Getting initial conditions"
+        open(42, file='initial_positions.txt', status='old')
+        do i= 1, N
+            read(42, *) p(1, i, :)
+        end do
+        close(42)
+    else
+        do i= 1, N
 
-        ! generating random coordinate
-        call random_coord_in_sphere(x,y,z)
+            if (i * 100 / N .ne. tmp) then
+                tmp = i * 100 / N
+                print *, "Generating initial conditions ", tmp, "%"
+            end if
 
-        if (i > 1) then
+            ! generating random coordinate
+            call random_coord_in_sphere(x,y,z)
 
-            ! if the coordinate is to near from another one, retry
-            do while ((is_too_near_from_another(x, y, z, p(1, :, 1), p(1, :, 2), p(1, :, 3), i) .eqv. .true.) &
-            .and. (tentatives < MAX_TENTATIVES))
+            if (i > 1) then
 
-                tentatives = tentatives + 1
-                call random_coord_in_sphere(x,y,z)
+                ! if the coordinate is to near from another one, retry
+                do while ((is_too_near_from_another(x, y, z, p(1, :, 1), p(1, :, 2), p(1, :, 3), i) .eqv. .true.) &
+                .and. (tentatives < MAX_TENTATIVES))
 
-            end do
-        end if
+                    tentatives = tentatives + 1
+                    call random_coord_in_sphere(x,y,z)
 
-        ! Storing the data
-        p(1, i, 1) = x  
-        p(1, i, 2) = y
-        p(1, i, 3) = z
+                end do
+            end if
 
+            ! Storing the data
+            p(1, i, 1) = x
+            p(1, i, 2) = y
+            p(1, i, 3) = z
+
+        end do
+        
+        print *, "Saving initial conditions"
+        open(42, file='initial_positions.txt', status='replace')
+        do i= 1, N
+            write(42, *) p(1, i, :)
+        end do
+        close(42)
+    end if
+
+    ! Velocities
+    
+    do i=1,N
         ! Highly complex computation of object velocity
         ! Assumption to compute it: angular velocity around z axes with constant value = 1
         v(1, i, 1) = -y
         v(1, i, 2) = x
         v(1, i, 3) = 0
-
     end do
 
-    ! do i = 1,N
-    !     ! Computing initial acceleration
-    !     call acceleration(p(1, :, :), m, i, N, a(1, i, :))
-    ! end do
+    ! Accelerations
+
+    do i = 1,N
+        ! Computing initial acceleration
+        call acceleration(p(1, :, :), m, i, N, a(1, i, :))
+    end do
+
+    ! Barycenter
 
     call barycenter(p(1,:,:), m, N, b(1,:))
 
-    ! Computing energies
+    ! Energies
+
     Ep(1) = potential_energy(p(1,:,:), m, N)
     Ec(1) = kinetic_energy(v(1,:,:), m, N)
     Et(1) = Ep(1) + Ec(1)
@@ -79,7 +106,6 @@ program nbody
     !--------------------
 
     do t=1,steps-1
-        print *, "t = ", t
     
         ! Print progress
         if (t * 100 / steps .ne. tmp) then
@@ -90,17 +116,6 @@ program nbody
         ! Compute particle position, velocity and acceleration at time t+1
         call next_state(p, v, a, t, m, dt, N, steps)
         call barycenter(p(t+1,:,:), m, N, b(t+1,:))
-
-        do i = 1,N
-            dist = sqrt(sum((p(t,i,:) - p(t+1,i,:))**2))
-            if (dist > 1) then
-                print *, "    i = ", i
-                print *, "        dist = ", dist
-                print *, "        p(t) = ", p(t,i,:), " p(t+1) = ", p(t+1,i,:)
-                print *, "        v(t) = ", v(t,i,:), " v(t+1) = ", v(t+1,i,:)
-                print *, "        a(t) = ", a(t,i,:), " a(t+1) = ", a(t+1,i,:)
-            end if
-        end do
 
         ! Compute energies at time t+1
         Ep(t+1) = potential_energy(p(t+1,:,:), m, N)
@@ -128,9 +143,9 @@ program nbody
     ! Writing system energies
     print *, "Saving energies"
     open(42, file='energies.txt', status='replace')
-    write(42, *) "# t     Ep     Ec     Et     Barycenter"
+    write(42, *) "# t     Ep     Ec     Et"
     do t = 1, steps
-        write(42, *) t*dt, Ep(t), Ec(t), Et(t), b(t,:)
+        write(42, *) t*dt, Ep(t), Ec(t), Et(t)
     end do
     close(42)
 
@@ -150,9 +165,19 @@ program nbody
     write(42, *) N, steps, dt
     close(42)
 
+
+
+
+
+
     ! ====================================================================================================
     ! SUBROUTINES & FUNCTIONS
     ! ====================================================================================================
+
+
+
+
+    
 
     contains
 
@@ -229,116 +254,41 @@ program nbody
             real,                   dimension(3)           :: dist
             integer,                dimension(3)           :: sign
             integer                                        :: i, j, k
-
-            ! print *, " "
-            ! print *, " "
-            ! print *, " "
-            ! print *, "--------------------------------------------------"
-
-            ! print *, "dt = ", dt, "dt/2 = ", dt/2.
-            ! print *, "m = ", m(:)
-
-            ! print *, " "
-            ! print *, "p(t) = "
-            ! do i=1,n
-            !     print *, p(t, i, :)
-            ! end do
-            ! print *, "v(t) = "
-            ! do i=1,n
-            !     print *, v(t, i, :)
-            ! end do
-
             
-            !fromage SHARE(tmp_p)
-
-            ! Compute p at i + 1/2
+            ! ! Compute p at t+1/2
+            ! !OMP PARALLEL DO SHARE(tmp_p)
             ! do i=1,N
             !     tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
             ! end do
+            ! !OMP END PARALLEL DO
 
-            !OMP END PARALLEL DO
-
-            ! print *, " "
-            ! print *, "p(t+1/2) = "
-            ! do i=1,n
-            !     print *, tmp_p(i, :)
-            ! end do
-
-            !fromage private(dist,sign,j,m,tmp_p) shared(tmp_a)
-
-            ! Compute a at i+1/2
+            ! ! Compute a at t+1/2
+            ! !OMP PARALLEL DO private(dist,sign,j,m,tmp_p) shared(tmp_a)
             ! do i=1,N
             !     call acceleration(tmp_p(:, :), m, i, N, tmp_a(i, :))
             ! end do
+            ! !OMP END PARALLEL DO
 
-            !OMP END PARALLEL DO
-
-            ! print *, " "
-            ! print *, "a(t+1/2) = "
-            ! do i=1,n
-            !     print *, tmp_a(i, :)
-            ! end do
-
-            !fromage SHARE(v)
-
-            ! Compute v at i+1
-            ! do i=1,N
-            !     v(t+1, i, :) = v(t, i, :) + tmp_a(i, :) * dt
-            ! end do
-            ! do i=1,N
-            !     v(t+1, i, :) = v(t, i, :) + a(t, i, :) * dt
-            ! end do
+            ! Compute velocity at t+1
+            !OMP PARALLEL DO SHARE(v) PRIVATE(a, dt)
             do i=1,N
-                v(t+1, i, 1) = - p(t, i, 2)
-                v(t+1, i, 2) = p(t, i, 1)
-                v(t+1, i, 3) = a(t, i, 3)
+                v(t+1, i, :) = v(t, i, :) + a(t, i, :) * dt
             end do
-
             !OMP END PARALLEL DO
 
-            ! print *, " "
-            ! print *, "v(t+1) = "
-            ! do i=1,n
-            !     print *, v(t+1, i, :)
-            ! end do
-
-            !fromage SHARE(p)
-
-            ! Compute p at i+1
-            ! do i=1,N
-            !     p(t+1, i, :) = tmp_p(i, :) + tmp_v(i, :) * dt/2.
-            ! end do
+            ! Position at t+1
+            !OMP PARALLEL DO SHARE(p) PRIVATE(v, dt)
             do i=1,N
                 p(t+1, i, :) = p(t,i, :) + v(t, i, :) * dt
             end do
-
             !OMP END PARALLEL DO
 
-            ! print *, " "
-            ! print *, "p(t+1) = "
-            ! do i=1,n
-            !     print *, p(t+1, i, :)
-            ! end do
-
-            !fromage private(dist,sign,j,m, p) shared(a)
-
             ! Compute a at i+1
-            ! do i=1,N
-            !     call acceleration(p(t+1, :, :), m, i, N, a(t+1, i, :))
-            ! end do
+            !OMP PARALLEL DO private(dist,sign,j,m, p) shared(a)
             do i=1,N
                 call acceleration(p(t+1, :, :), m, i, N, a(t+1, i, :))
             end do
-            a(t+1, i, 1) = 0
-            a(t+1, i, 2) = 0 
-
             !OMP END PARALLEL DO
-
-            ! print *, " "
-            ! print *, "a(t+1) = "
-            ! do i=1,n
-            !     print *, a(t+1, i, :)
-            ! end do
 
         end subroutine next_state
 
@@ -352,46 +302,30 @@ program nbody
             real,    intent(  out), dimension(3)    :: a
             real,                   dimension(3)    :: dist
             integer,                dimension(3)    :: s
-            real                                    :: G = 1.0, eps = 0.05
+            real                                    :: G = 1, eps = 0.05, r
             integer                                 :: j, k
 
             ! print *, "--------------------------------------------------"
             ! print *, "p_i = ", i, " | ", p(i,:)
             ! print *, " "
 
-            a(:) = 1
+            a = 0
 
             ! Compute a at i+1
             do j=1,N
-                if (i .ne. j) then
-                    a(:) = a(:) + G * m(j) * (p(j,:) - p(i,:)) / (norm2(p(j,:) - p(i,:)) + eps)**(3/2)
-                    
-
-                    ! ! print *, "p_j = ", j, " | ", p(j,:)
-
-                    ! ! Computing distance between i and j
-                    ! dist = p(j, :) - p(i, :)
-
-                    ! ! print *, "d_j = ", j, " | ", dist(:)
-
-                    ! s = 1
-                    ! do k=1,3
-                    !     if (dist(k) < 0) then
-                    !         s(k) = -1
-                    !     end if
-                    ! end do
-
-                    ! ! print *, "s_j = ", j, " | ", s(:)
-                    ! ! print *, "a_j = ", j, " | ", s(:) * G * m(j) / (dist(:) * dist(:) + eps)
-                    ! ! print *, " "
-
-                    ! ! Computing acceleration
-                    ! a(:) = a(:) + s(:) * G * m(j) / (dist(:) * dist(:) + eps )  
-
+                if (j==i) then
+                    cycle
                 end if
+                
+                dist(:) = p(j,:) - p(i,:)
+
+                r = sqrt(sum(dist**2) + eps**2)
+
+                a(:) = a(:) + dist(:) * G * m(j) / r**3
+
+                ! Compute the potential energy
+                ! ep = ep - 0.5*gg*m**2/r
             end do
-            
-            ! print *, "a = ", a(:)
 
         end subroutine acceleration
 
@@ -403,18 +337,25 @@ program nbody
             real,    intent(in   ), dimension(N, 3) :: p
             real,    intent(in   ), dimension(N)    :: m
             integer, intent(in   )                  :: N
-            real,                   dimension(3)    :: a, b
-            real                                    :: potential_energy, G=1
-            real                                    :: dist
+            real,                   dimension(3)    :: a, b, dist
+            real                                    :: potential_energy, G=1, eps = 0.05
+            real                                    :: r
             integer                                 :: i, j, k
 
             potential_energy = 0
 
-            ! Compute a at i+1
             do i=1,N
-                call acceleration(p, m, i, N, a)
-                call barycenter(p, m, N, b)
-                potential_energy = potential_energy + sum(m) * sqrt(sum(a**2)) * sqrt(sum((b - p(i,:))**2))
+                do j=1,N
+                    if (j==i) then
+                        cycle
+                    end if
+
+                    dist(:) = p(j,:) - p(i,:)
+
+                    r = sqrt(sum(dist**2) + eps**2)
+
+                    potential_energy = potential_energy - 0.5 * G * m(j)**2 / r
+                end do
             end do
 
         end function potential_energy

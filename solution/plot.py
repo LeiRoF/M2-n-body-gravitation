@@ -1,21 +1,25 @@
 import os
 from copy import deepcopy
-os.system("gfortran -fno-backtrace -O3 .\main.f90 -o main.exe")
-os.system("main.exe")
 
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.animation
 
-energies = np.loadtxt("energies.txt")
-bodies = np.loadtxt("nbody.txt")
-barycenter = np.loadtxt("barycenter.txt")
+N = 2000
+steps = 1000
+dt = 0.01
 
-N, steps, dt = np.loadtxt("parameters.txt")
-N = int(N)
-steps = int(steps)
+def load_file(filename, in_line): 
+    data = np.fromfile(filename, dtype = np.float64) 
+    print(data.shape)
+    data = data.reshape(data.shape[0]//(in_line*3), in_line, 3) 
+    return data 
 
-bodies = bodies.reshape(steps, N, 9)
+energies = load_file("energy_fort_seq.dat", N)
+bodies = load_file("position_fort_seq.bin", N)
+
+print(energies.shape)
+print(bodies.shape)
 
 def update_graph1(t):
     tmp = deepcopy(bodies[t,:,:2]) # x,y 
@@ -29,32 +33,19 @@ def update_graph1(t):
 
     return graph1,
 
-
 fig1 = plt.figure()
 
 # ----------------------------------------------------------------------------------------------------
-# Energies
+# 3D plot
 
-ax_energy = fig1.add_subplot(333)
-ax_energy.plot(np.arange(steps),energies[:,1],label="Potential")
-ax_energy.legend()
-ax_energy = fig1.add_subplot(336)
-ax_energy.plot(np.arange(steps),energies[:,2],label="Kinetic")
-ax_energy.legend()
-ax_energy = fig1.add_subplot(339)
-ax_energy.plot(np.arange(steps),energies[:,3],label="Total")
-ax_energy.legend()
+ax = fig1.add_subplot(335, projection='3d')
+title = ax.set_title('N-body gravitation')
 
-# ----------------------------------------------------------------------------------------------------
-# All energies
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
 
-ax_energy = fig1.add_subplot(338)
-ax_energy.plot(np.arange(steps),energies[:,1],label="Potential")
-ax_energy.legend()
-ax_energy.plot(np.arange(steps),energies[:,2],label="Kinetic")
-ax_energy.legend()
-ax_energy.plot(np.arange(steps),energies[:,3],label="Total")
-ax_energy.legend()
+graph = ax.scatter(bodies[0,:,0], bodies[0,:,1], bodies[0,:,2], c = np.arange(N)/N, cmap = "hsv")
 
 # ----------------------------------------------------------------------------------------------------
 # 2D plots
@@ -83,28 +74,17 @@ graph3 = ax3.scatter(bodies[0,:,1], bodies[0,:,2], c = np.arange(N)/N, cmap = "h
 ani1 = matplotlib.animation.FuncAnimation(fig1, update_graph1, steps, interval=40, blit=False)
 
 # ----------------------------------------------------------------------------------------------------
-# 3D plots
+# Energies
 
-ax = fig1.add_subplot(335, projection='3d')
-title = ax.set_title('N-body gravitation')
-
-ax.set_xlabel('x')
-ax.set_ylabel('y')
-ax.set_zlabel('z')
-
-graph = ax.scatter(bodies[0,:,0], bodies[0,:,1], bodies[0,:,2], c = np.arange(N)/N, cmap = "hsv")
-
-# ----------------------------------------------------------------------------------------------------
-# Barycenter
-
-# fig1 = plt.figure()
-# ax_barycenter = fig1.add_subplot(236, projection='3d')
-
-# ax_barycenter.set_xlabel('x')
-# ax_barycenter.set_ylabel('y')
-# ax_barycenter.set_zlabel('z')
-
-# graph_barycenter = ax_barycenter.scatter([barycenter[0, 1]], [barycenter[0, 2]], [barycenter[0, 3]])
+ax_energy = fig1.add_subplot(333)
+ax_energy.plot(np.arange(steps),energies[:,1],label="Potential")
+ax_energy.legend()
+ax_energy = fig1.add_subplot(336)
+ax_energy.plot(np.arange(steps),energies[:,2],label="Kinetic")
+ax_energy.legend()
+ax_energy = fig1.add_subplot(339)
+ax_energy.plot(np.arange(steps),energies[:,3],label="Total")
+ax_energy.legend()
 
 # ----------------------------------------------------------------------------------------------------
 # Animation

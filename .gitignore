@@ -3,3 +3,6 @@ parameters.txt
 nbody.txt
 main.exe
 animation.gif
+animation_reference.gif
+position_fort_seq.bin
+energy_fort_seq.dat
