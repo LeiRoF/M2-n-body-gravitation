@@ -2,8 +2,8 @@ program nbody
     implicit none
 
     ! Safe to edit
-    INTEGER, PARAMETER         :: N = 1000 ! number of bodies
-    integer, parameter         :: steps = 1000 ! simulation time in steps
+    INTEGER, PARAMETER         :: N = 100 ! number of bodies
+    integer, parameter         :: steps = 100 ! simulation time in steps
     real, parameter            :: dt = 0.1 ! time step in seconds
     logical, parameter         :: new_initial_conditions = .false. ! set to .true. to generate new initial conditions
 
@@ -256,30 +256,30 @@ program nbody
             integer                                        :: i, j, k
             
             ! ! Compute p at t+1/2
-            ! !OMP PARALLEL DO SHARE(tmp_p)
-            ! do i=1,N
-            !     tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
-            ! end do
-            ! !OMP END PARALLEL DO
+            !OMP PARALLEL DO SHARE(tmp_p)
+            do i=1,N
+                tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
+            end do
+            !OMP END PARALLEL DO
 
             ! ! Compute a at t+1/2
-            ! !OMP PARALLEL DO private(dist,sign,j,m,tmp_p) shared(tmp_a)
-            ! do i=1,N
-            !     call acceleration(tmp_p(:, :), m, i, N, tmp_a(i, :))
-            ! end do
-            ! !OMP END PARALLEL DO
+            !OMP PARALLEL DO private(dist,sign,j,m,tmp_p) shared(tmp_a)
+            do i=1,N
+                call acceleration(tmp_p(:, :), m, i, N, tmp_a(i, :))
+            end do
+            !OMP END PARALLEL DO
 
             ! Compute velocity at t+1
             !OMP PARALLEL DO SHARE(v) PRIVATE(a, dt)
             do i=1,N
-                v(t+1, i, :) = v(t, i, :) + a(t, i, :) * dt
+                v(t+1, i, :) = v(t, i, :) + a(t, i, :) * dt/2 + tmp_a(i, :) * dt/2
             end do
             !OMP END PARALLEL DO
 
             ! Position at t+1
             !OMP PARALLEL DO SHARE(p) PRIVATE(v, dt)
             do i=1,N
-                p(t+1, i, :) = p(t,i, :) + v(t, i, :) * dt
+                p(t+1, i, :) = tmp_p(i, :) + v(t, i, :) * dt/2
             end do
             !OMP END PARALLEL DO
 
