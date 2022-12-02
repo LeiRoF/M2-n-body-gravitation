@@ -2,18 +2,19 @@ program nbody
     implicit none
 
     ! Safe to edit
-    INTEGER, PARAMETER         :: N = 100 ! number of bodies
-    integer, parameter         :: steps = 100 ! simulation time in steps
+    INTEGER, PARAMETER         :: N = 1000 ! number of bodies
+    integer, parameter         :: steps = 1000 ! simulation time in steps
     real, parameter            :: dt = 0.1 ! time step in seconds
-    logical, parameter         :: new_initial_conditions = .false. ! set to .true. to generate new initial conditions
+    logical                    :: new_initial_conditions = .false. ! set to .true. to generate new initial conditions
+    logical                    :: verbose = .false.
+
 
     ! Don't touch to that, you fool!
     integer                    :: MAX_TENTATIVES = 1000
     INTEGER                    :: tentatives = 0
-    INTEGER                    :: i,j, t, tmp = -1
-    REAL                       :: PI, tmp2, dist
+    INTEGER                    :: i, t, tmp = -1
+    REAL                       :: PI
     REAL                       :: x, y, z
-    real                       :: vx, vy, vz
     real, dimension(steps,N,3) :: p=0, v=0, a=0
     real, dimension(N)         :: m
     real, dimension(steps)     :: Ep, Ec, Et
@@ -30,7 +31,9 @@ program nbody
     ! Position
 
     if (new_initial_conditions .eqv. .false.) then
-        print *, "Getting initial conditions"
+        if (verbose .eqv. .true.) then
+            print *, "Getting initial conditions"
+        end if
         open(42, file='initial_positions.txt', status='old')
         do i= 1, N
             read(42, *) p(1, i, :)
@@ -39,9 +42,11 @@ program nbody
     else
         do i= 1, N
 
-            if (i * 100 / N .ne. tmp) then
-                tmp = i * 100 / N
-                print *, "Generating initial conditions ", tmp, "%"
+            if (verbose .eqv. .true.) then
+                if (i * 100 / N .ne. tmp) then
+                    tmp = i * 100 / N
+                    print *, "Generating initial conditions ", tmp, "%"
+                end if
             end if
 
             ! generating random coordinate
@@ -65,8 +70,11 @@ program nbody
             p(1, i, 3) = z
 
         end do
-        
-        print *, "Saving initial conditions"
+
+        if (verbose .eqv. .true.) then
+            print *, "Saving initial conditions"
+        end if
+
         open(42, file='initial_positions.txt', status='replace')
         do i= 1, N
             write(42, *) p(1, i, :)
@@ -108,9 +116,11 @@ program nbody
     do t=1,steps-1
     
         ! Print progress
-        if (t * 100 / steps .ne. tmp) then
-            tmp = t * 100 / steps
-            print *, "Computing evolution ", tmp, "%"
+        if (verbose .eqv. .true.) then
+            if (t * 100 / steps .ne. tmp) then
+                tmp = t * 100 / steps
+                print *, "Computing evolution ", tmp, "%"
+            end if
         end if
 
         ! Compute particle position, velocity and acceleration at time t+1
@@ -128,7 +138,10 @@ program nbody
     !--------------------
 
     ! Writing bodies position, velocity and acceleration
-    print *, "Saving bodies data"
+
+    if (verbose .eqv. .true.) then
+        print *, "Saving bodies data"
+    end if
     open(42, file='nbody.txt', status='replace')
     write(42, *) "# p_x     p_y     p_z     v_x     v_y     v_z     a_x     a_y     a_z"
     do t = 1, steps
@@ -141,7 +154,9 @@ program nbody
     close(42)
     
     ! Writing system energies
-    print *, "Saving energies"
+    if (verbose .eqv. .true.) then
+        print *, "Saving energies"
+    end if
     open(42, file='energies.txt', status='replace')
     write(42, *) "# t     Ep     Ec     Et"
     do t = 1, steps
@@ -150,7 +165,9 @@ program nbody
     close(42)
 
     ! Writing barycenter
-    print *, "Saving energies"
+    if (verbose .eqv. .true.) then
+        print *, "Saving energies"
+    end if
     open(42, file='barycenter.txt', status='replace')
     write(42, *) "# t, barycenter"
     do t = 1, steps
@@ -159,7 +176,9 @@ program nbody
     close(42)
     
     ! Writing simulationn parameters
-    print *, "Saving simulation parameters"
+    if (verbose .eqv. .true.) then
+        print *, "Saving simulation parameters"
+    end if
     open(42, file='parameters.txt', status='replace')
     write(42, *) "# N     steps     dt"
     write(42, *) N, steps, dt
@@ -256,39 +275,39 @@ program nbody
             integer                                        :: i, j, k
             
             ! Compute p at t+1/2
-            !OMP PARALLEL DO SHARE(tmp_p)
+            !$OMP PARALLEL DO PRIVATE(p, v, dt) SHARED(tmp_p) 
             do i=1,N
                 tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
             end do
-            !OMP END PARALLEL DO
+            !$OMP END PARALLEL DO
 
             ! Compute a at t+1/2
-            ! !OMP PARALLEL DO private(dist,sign,j,m,tmp_p) shared(tmp_a)
+            ! OMP PARALLEL DO private(tmp_p, m, i, N) shared(tmp_a)
             do i=1,N
                 call acceleration(tmp_p(:, :), m, i, N, tmp_a(i, :))
             end do
             ! !OMP END PARALLEL DO
 
             ! Compute velocity at t+1
-            !OMP PARALLEL DO SHARE(v) PRIVATE(a, dt, tmp_a)
+            !$OMP PARALLEL DO PRIVATE(a, dt, tmp_a) SHARED(v) 
             do i=1,N
                 v(t+1, i, :) = v(t, i, :) + a(t, i, :) * dt/2 + tmp_a(i, :) * dt/2
             end do
-            !OMP END PARALLEL DO
+            !$OMP END PARALLEL DO
 
             ! Position at t+1
-            !OMP PARALLEL DO SHARE(p) PRIVATE(v, dt)
+            !$OMP PARALLEL DO SHARED(p) PRIVATE(tmp_p, v, dt)
             do i=1,N
                 p(t+1, i, :) = tmp_p(i, :) + v(t, i, :) * dt/2
             end do
-            !OMP END PARALLEL DO
+            !$OMP END PARALLEL DO
 
             ! Compute a at i+1
-            ! !OMP PARALLEL DO private(dist,sign,j,m, p) shared(a)
+            ! OMP PARALLEL DO private(dist,sign,j,m, p) shared(a)
             do i=1,N
                 call acceleration(p(t+1, :, :), m, i, N, a(t+1, i, :))
             end do
-            ! !OMP END PARALLEL DO
+            ! OMP END PARALLEL DO
 
         end subroutine next_state
 
@@ -312,7 +331,7 @@ program nbody
             a = 0
 
             ! Compute a at i+1
-            !OMP PARALLEL DO private(dist,p, eps, r, G, m, j) shared(a)
+            !$OMP PARALLEL DO private(dist,p, eps, r, G, m, j) shared(a)
             do j=1,N
                 if (j==i) then
                     cycle
@@ -327,7 +346,7 @@ program nbody
                 ! Compute the potential energy
                 ! ep = ep - 0.5*gg*m**2/r
             end do
-            !OMP END PARALLEL DO
+            !$OMP END PARALLEL DO
 
         end subroutine acceleration
 
