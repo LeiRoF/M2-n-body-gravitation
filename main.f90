@@ -255,22 +255,22 @@ program nbody
             integer,                dimension(3)           :: sign
             integer                                        :: i, j, k
             
-            ! ! Compute p at t+1/2
+            ! Compute p at t+1/2
             !OMP PARALLEL DO SHARE(tmp_p)
             do i=1,N
                 tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
             end do
             !OMP END PARALLEL DO
 
-            ! ! Compute a at t+1/2
-            !OMP PARALLEL DO private(dist,sign,j,m,tmp_p) shared(tmp_a)
+            ! Compute a at t+1/2
+            ! !OMP PARALLEL DO private(dist,sign,j,m,tmp_p) shared(tmp_a)
             do i=1,N
                 call acceleration(tmp_p(:, :), m, i, N, tmp_a(i, :))
             end do
-            !OMP END PARALLEL DO
+            ! !OMP END PARALLEL DO
 
             ! Compute velocity at t+1
-            !OMP PARALLEL DO SHARE(v) PRIVATE(a, dt)
+            !OMP PARALLEL DO SHARE(v) PRIVATE(a, dt, tmp_a)
             do i=1,N
                 v(t+1, i, :) = v(t, i, :) + a(t, i, :) * dt/2 + tmp_a(i, :) * dt/2
             end do
@@ -284,11 +284,11 @@ program nbody
             !OMP END PARALLEL DO
 
             ! Compute a at i+1
-            !OMP PARALLEL DO private(dist,sign,j,m, p) shared(a)
+            ! !OMP PARALLEL DO private(dist,sign,j,m, p) shared(a)
             do i=1,N
                 call acceleration(p(t+1, :, :), m, i, N, a(t+1, i, :))
             end do
-            !OMP END PARALLEL DO
+            ! !OMP END PARALLEL DO
 
         end subroutine next_state
 
@@ -312,6 +312,7 @@ program nbody
             a = 0
 
             ! Compute a at i+1
+            !OMP PARALLEL DO private(dist,p, eps, r, G, m, j) shared(a)
             do j=1,N
                 if (j==i) then
                     cycle
@@ -326,6 +327,7 @@ program nbody
                 ! Compute the potential energy
                 ! ep = ep - 0.5*gg*m**2/r
             end do
+            !OMP END PARALLEL DO
 
         end subroutine acceleration
 
