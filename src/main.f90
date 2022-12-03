@@ -1,13 +1,9 @@
 program nbody
+
+    use config
+    ! use settings
+
     implicit none
-
-    ! Safe to edit
-    INTEGER, PARAMETER         :: N = 1000 ! number of bodies
-    integer, parameter         :: steps = 1000 ! simulation time in steps
-    real, parameter            :: dt = 0.1 ! time step in seconds
-    logical                    :: new_initial_conditions = .false. ! set to .true. to generate new initial conditions
-    logical                    :: verbose = .false.
-
 
     ! Don't touch to that, you fool!
     integer                    :: MAX_TENTATIVES = 1000
@@ -34,7 +30,7 @@ program nbody
         if (verbose .eqv. .true.) then
             print *, "Getting initial conditions"
         end if
-        open(42, file='initial_positions.txt', status='old')
+        open(42, file='data/initial_positions.txt', status='old')
         do i= 1, N
             read(42, *) p(1, i, :)
         end do
@@ -75,7 +71,7 @@ program nbody
             print *, "Saving initial conditions"
         end if
 
-        open(42, file='initial_positions.txt', status='replace')
+        open(42, file='data/initial_positions.txt', status='replace')
         do i= 1, N
             write(42, *) p(1, i, :)
         end do
@@ -96,7 +92,7 @@ program nbody
 
     do i = 1,N
         ! Computing initial acceleration
-        call acceleration(p(1, :, :), m, i, N, a(1, i, :))
+        call acceleration(p(1, :, :), m, i, N, a(1, i, :), .true.)
     end do
 
     ! Barycenter
@@ -137,52 +133,55 @@ program nbody
     ! Export results
     !--------------------
 
-    ! Writing bodies position, velocity and acceleration
+    if (save_results .eqv. .true.) then
 
-    if (verbose .eqv. .true.) then
-        print *, "Saving bodies data"
-    end if
-    open(42, file='nbody.txt', status='replace')
-    write(42, *) "# p_x     p_y     p_z     v_x     v_y     v_z     a_x     a_y     a_z"
-    do t = 1, steps
-        write(42, *) " "
-        write(42, *) "# t = ", t*dt, " step = ", t
-        do i = 1, N
-            write(42, *) p(t,i,:), v(t,i,:), a(t,i,:)
+        ! Writing bodies position, velocity and acceleration
+        if (verbose .eqv. .true.) then
+            print *, "Saving bodies data"
+        end if
+        open(42, file='data/nbody.txt', status='replace')
+        write(42, *) "# p_x     p_y     p_z     v_x     v_y     v_z     a_x     a_y     a_z"
+        do t = 1, steps
+            write(42, *) " "
+            write(42, *) "# t = ", t*dt, " step = ", t
+            do i = 1, N
+                write(42, *) p(t,i,:), v(t,i,:), a(t,i,:)
+            end do
         end do
-    end do
-    close(42)
-    
-    ! Writing system energies
-    if (verbose .eqv. .true.) then
-        print *, "Saving energies"
-    end if
-    open(42, file='energies.txt', status='replace')
-    write(42, *) "# t     Ep     Ec     Et"
-    do t = 1, steps
-        write(42, *) t*dt, Ep(t), Ec(t), Et(t)
-    end do
-    close(42)
+        close(42)
+        
+        ! Writing system energies
+        if (verbose .eqv. .true.) then
+            print *, "Saving energies"
+        end if
+        open(42, file='data/energies.txt', status='replace')
+        write(42, *) "# t     Ep     Ec     Et"
+        do t = 1, steps
+            write(42, *) t*dt, Ep(t), Ec(t), Et(t)
+        end do
+        close(42)
 
-    ! Writing barycenter
-    if (verbose .eqv. .true.) then
-        print *, "Saving energies"
-    end if
-    open(42, file='barycenter.txt', status='replace')
-    write(42, *) "# t, barycenter"
-    do t = 1, steps
-        write(42, *) t*dt, b(t,:)
-    end do
-    close(42)
+        ! Writing barycenter
+        if (verbose .eqv. .true.) then
+            print *, "Saving energies"
+        end if
+        open(42, file='data/barycenter.txt', status='replace')
+        write(42, *) "# t, barycenter"
+        do t = 1, steps
+            write(42, *) t*dt, b(t,:)
+        end do
+        close(42)
+        
+        ! Writing simulationn parameters
+        if (verbose .eqv. .true.) then
+            print *, "Saving simulation parameters"
+        end if
+        open(42, file='data/parameters.txt', status='replace')
+        write(42, *) "# N     steps     dt"
+        write(42, *) N, steps, dt
+        close(42)
     
-    ! Writing simulationn parameters
-    if (verbose .eqv. .true.) then
-        print *, "Saving simulation parameters"
     end if
-    open(42, file='parameters.txt', status='replace')
-    write(42, *) "# N     steps     dt"
-    write(42, *) N, steps, dt
-    close(42)
 
 
 
@@ -269,60 +268,62 @@ program nbody
             real,    intent(in   ), dimension(N)           :: m 
             integer, intent(in   )                         :: N, steps
             real,    intent(in   )                         :: dt
-            real,                   dimension(N,3)         :: tmp_p, tmp_v, tmp_a ! time t+1/2
-            real,                   dimension(3)           :: dist
-            integer,                dimension(3)           :: sign
-            integer                                        :: i, j, k
+            real,                   dimension(N,3)         :: pi,vi,ai, pf,vf,af, tmp_p, tmp_a ! time t+1/2
+            integer                                        :: i
+            integer                                        :: omp_get_thread_num, omp_get_num_threads
+
+            pi = p(t,:,:)
+            vi = v(t,:,:)   
+            ai = a(t,:,:)
+            pf = 0
+            vf = 0
+            af = 0
+            tmp_p = 0
+            tmp_a = 0
             
-            ! Compute p at t+1/2
-            !$OMP PARALLEL DO PRIVATE(p, v, dt) SHARED(tmp_p) 
+            ! OMP PARALLEL DO SCHEDULE(GUIDED) FIRSTPRIVATE(tmp_p, tmp_a, pi, vi, ai, m, N, dt) REDUCTION(+:pf,vf,af)
             do i=1,N
-                tmp_p(i,:) = p(t, i,:) + v(t, i,:) * dt/2.
-            end do
-            !$OMP END PARALLEL DO
 
-            ! Compute a at t+1/2
-            ! OMP PARALLEL DO private(tmp_p, m, i, N) shared(tmp_a)
-            do i=1,N
-                call acceleration(tmp_p(:, :), m, i, N, tmp_a(i, :))
-            end do
-            ! !OMP END PARALLEL DO
+                ! print *, "Thread ", omp_get_thread_num(), " of ", omp_get_num_threads()
 
-            ! Compute velocity at t+1
-            !$OMP PARALLEL DO PRIVATE(a, dt, tmp_a) SHARED(v) 
-            do i=1,N
-                v(t+1, i, :) = v(t, i, :) + a(t, i, :) * dt/2 + tmp_a(i, :) * dt/2
-            end do
-            !$OMP END PARALLEL DO
+                ! Compute p at t+1/2
+                tmp_p(i,:) = pi(i,:) + vi(i,:) * dt/2.
 
-            ! Position at t+1
-            !$OMP PARALLEL DO SHARED(p) PRIVATE(tmp_p, v, dt)
-            do i=1,N
-                p(t+1, i, :) = tmp_p(i, :) + v(t, i, :) * dt/2
-            end do
-            !$OMP END PARALLEL DO
+                ! Compute a at t+1/2
+                call acceleration(tmp_p(:, :), m, i, N, tmp_a(i, :), .false.)
 
-            ! Compute a at i+1
-            ! OMP PARALLEL DO private(dist,sign,j,m, p) shared(a)
-            do i=1,N
-                call acceleration(p(t+1, :, :), m, i, N, a(t+1, i, :))
+                ! Compute velocity at t+1
+                vf(i, :) = vi(i, :) + ai(i, :) * dt/2 + tmp_a(i, :) * dt/2
+
+                ! Position at t+1
+                pf(i, :) = tmp_p(i, :) + vi(i, :) * dt/2
+
+                ! Compute a at i+1
+                call acceleration(pf(:, :), m, i, N, af(i, :), .false.)
+
             end do
             ! OMP END PARALLEL DO
+
+            p(t+1, :, :) = pf
+            v(t+1, :, :) = vf
+            a(t+1, :, :) = af
 
         end subroutine next_state
 
         !----------------------------------------------------------------------------------------------------
         ! Compute the acceleration of a body considering the position of the others
 
-        subroutine acceleration(p, m, i, N, a)
+        subroutine acceleration(p, m, i, N, a, verbose)
             real,    intent(in   ), dimension(N, 3) :: p
             real,    intent(in   ), dimension(N)    :: m
             integer, intent(in   )                  :: i, N
             real,    intent(  out), dimension(3)    :: a
             real,                   dimension(3)    :: dist
-            integer,                dimension(3)    :: s
-            real                                    :: G = 1, eps = 0.05, r
-            integer                                 :: j, k
+            real                                    :: G = 1, eps = 0.05
+            real                                    :: r
+            integer                                 :: j
+            integer                                 :: omp_get_num_threads
+            logical, intent(in   )                  :: verbose
 
             ! print *, "--------------------------------------------------"
             ! print *, "p_i = ", i, " | ", p(i,:)
@@ -331,11 +332,17 @@ program nbody
             a = 0
 
             ! Compute a at i+1
-            !$OMP PARALLEL DO private(dist,p, eps, r, G, m, j) shared(a)
+            !$OMP PARALLEL DO REDUCTION(+:a) FIRSTPRIVATE(p, m, i, N, G, eps, r, dist)
             do j=1,N
+
+                if (i == 1 .and. j == 1 .and. verbose .eqv. .true.) then
+                    print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
+                end if
+
                 if (j==i) then
                     cycle
                 end if
+                
                 
                 dist(:) = p(j,:) - p(i,:)
 
@@ -359,7 +366,8 @@ program nbody
             real,    intent(in   ), dimension(N)    :: m
             integer, intent(in   )                  :: N
             real,                   dimension(3)    :: a, b, dist
-            real                                    :: potential_energy, G=1, eps = 0.05
+            real                                    :: potential_energy
+            real                                    :: G=1, eps = 0.05
             real                                    :: r
             integer                                 :: i, j, k
 
