@@ -16,7 +16,7 @@ program nbody
     real, dimension(steps)     :: Ep, Ec, Et
     real, dimension(steps,3)   :: b ! barycenter
 
-    PI = 4*ATAN(1.)
+    PI = acos(-1.0)
 
     !--------------------
     ! Initial conditions
@@ -25,7 +25,6 @@ program nbody
     m = 1./N
 
     ! Position
-
     if (new_initial_conditions .eqv. .false.) then
         if (verbose .eqv. .true.) then
             print *, "Getting initial conditions"
@@ -270,7 +269,7 @@ program nbody
             real,    intent(in   )                         :: dt
             real,                   dimension(N,3)         :: pi,vi,ai, pf,vf,af, tmp_p, tmp_a ! time t+1/2
             integer                                        :: i
-            integer                                        :: omp_get_thread_num, omp_get_num_threads
+            integer                                        :: omp_get_num_threads
 
             pi = p(t,:,:)
             vi = v(t,:,:)   
@@ -281,10 +280,14 @@ program nbody
             tmp_p = 0
             tmp_a = 0
             
-            ! OMP PARALLEL DO SCHEDULE(GUIDED) FIRSTPRIVATE(tmp_p, tmp_a, pi, vi, ai, m, N, dt) REDUCTION(+:pf,vf,af)
+            !SCHEDULE(GUIDED) FIRSTPRIVATE(tmp_p, tmp_a, pi, vi, ai, m, N, dt) REDUCTION(+:pf,vf,af)
+            !$OMP PARALLEL
+            !$OMP DO SCHEDULE(DYNAMIC,N)
             do i=1,N
 
-                ! print *, "Thread ", omp_get_thread_num(), " of ", omp_get_num_threads()
+                if (i == 1 .and. t == 2) then
+                    print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
+                end if
 
                 ! Compute p at t+1/2
                 tmp_p(i,:) = pi(i,:) + vi(i,:) * dt/2.
@@ -302,7 +305,8 @@ program nbody
                 call acceleration(pf(:, :), m, i, N, af(i, :), .false.)
 
             end do
-            ! OMP END PARALLEL DO
+            !$OMP END DO
+            !$OMP END PARALLEL
 
             p(t+1, :, :) = pf
             v(t+1, :, :) = vf
@@ -332,12 +336,12 @@ program nbody
             a = 0
 
             ! Compute a at i+1
-            !$OMP PARALLEL DO REDUCTION(+:a) FIRSTPRIVATE(p, m, i, N, G, eps, r, dist)
+            ! OMP PARALLEL DO REDUCTION(+:a) FIRSTPRIVATE(p, m, i, N, G, eps, r, dist)
             do j=1,N
 
-                if (i == 1 .and. j == 1 .and. verbose .eqv. .true.) then
-                    print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
-                end if
+                ! if (i == 1 .and. j == 1 .and. verbose .eqv. .true.) then
+                !     print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
+                ! end if
 
                 if (j==i) then
                     cycle
@@ -353,7 +357,7 @@ program nbody
                 ! Compute the potential energy
                 ! ep = ep - 0.5*gg*m**2/r
             end do
-            !$OMP END PARALLEL DO
+            ! OMP END PARALLEL DO
 
         end subroutine acceleration
 
