@@ -1,22 +1,31 @@
 program nbody
 
-    use config
     ! use settings
 
     implicit none
 
+    ! Safe to edit
+    integer, parameter :: N = 1000 ! number of bodies
+    integer, parameter :: steps = 100 ! simulation time in steps
+    real, parameter    :: dt = 0.1 ! time step in seconds
+    logical            :: new_initial_conditions = .true. ! set to .true. to generate new initial conditions
+    logical            :: verbose = .false.
+    logical            :: save_results = .true. ! set to .false. to disable saving results (for bulk runs)
+
     ! Don't touch to that, you fool!
-    integer                    :: MAX_TENTATIVES = 1000
-    INTEGER                    :: tentatives = 0
+    ! integer                    :: MAX_TENTATIVES = 1000
+    ! INTEGER                    :: tentatives = 0
     INTEGER                    :: i, t, tmp = -1
     REAL                       :: PI
     REAL                       :: x, y, z
     real, dimension(3,N,steps) :: p=0, v=0, a=0
     real, dimension(N)         :: m
-    real, dimension(steps)     :: Ep, Ec, Et
+    real, dimension(steps)     :: Ep=0, Ec=0, Et=0
     real, dimension(3,steps)   :: b ! barycenter
 
     PI = acos(-1.0)
+
+    ! print *, "NBody simulation..."
 
     !--------------------
     ! Initial conditions
@@ -34,6 +43,7 @@ program nbody
             read(42, *) p(:, i, 1)
         end do
         close(42)
+    
     else
         do i= 1, N
 
@@ -46,18 +56,6 @@ program nbody
 
             ! generating random coordinate
             call random_coord_in_sphere(x,y,z)
-
-            if (i > 1) then
-
-                ! if the coordinate is to near from another one, retry
-                do while ((is_too_near_from_another(x, y, z, p(1, :, 1), p(2, :, 1), p(3, :, 1), i) .eqv. .true.) &
-                .and. (tentatives < MAX_TENTATIVES))
-
-                    tentatives = tentatives + 1
-                    call random_coord_in_sphere(x,y,z)
-
-                end do
-            end if
 
             ! Storing the data
             p(1, i, 1) = x
@@ -85,23 +83,20 @@ program nbody
         v(1, i, 1) = -y
         v(2, i, 1) = x
         v(3, i, 1) = 0
+        
     end do
 
     ! Accelerations
 
-    do i = 1,N
-        ! Computing initial acceleration
-        call acceleration(p(:, :, 1), m, i, N, a(:, i, 1), .true.)
-    end do
+    ! Computing initial acceleration
+    call acceleration(p(:, :, 1), m, N, a(:, :, 1), Ep(1))
 
     ! Barycenter
 
     call barycenter(p(:,:,1), m, N, b(:,1))
 
     ! Energies
-
-    Ep(1) = potential_energy(p(:,:,1), m, N)
-    Ec(1) = kinetic_energy(v(:,:,1), m, N)
+    Ec(1) = Ec(1) + 0.5 * m(i) * (v(1, i, 1) ** 2 + v(2, i, 1) ** 2 + v(3, i, 1) ** 2)
     Et(1) = Ep(1) + Ec(1)
 
     !--------------------
@@ -110,7 +105,7 @@ program nbody
 
     do t=1,steps-1
     
-        ! Print progress
+        ! ! Print progress
         if (verbose .eqv. .true.) then
             if (t * 100 / steps .ne. tmp) then
                 tmp = t * 100 / steps
@@ -119,13 +114,9 @@ program nbody
         end if
 
         ! Compute particle position, velocity and acceleration at time t+1
-        call next_state(p, v, a, t, m, dt, N, steps)
+        call next_state(p, v, a, t, m, dt, N, steps, Ep(t+1), Ec(t+1), Et(t+1))
         call barycenter(p(:,:,t+1), m, N, b(:,t+1))
 
-        ! Compute energies at time t+1
-        Ep(t+1) = potential_energy(p(:,:,t+1), m, N)
-        Ec(t+1) = kinetic_energy(v(:,:,t+1), m, N)
-        Et(t+1) = Ep(t+1) + Ec(t+1)
     end do
 
     !--------------------
@@ -182,6 +173,7 @@ program nbody
     
     end if
 
+    ! print *, "Done!"
 
 
 
@@ -221,58 +213,21 @@ program nbody
 
         end subroutine random_coord_in_sphere
 
-        ! ----------------------------------------------------------------------------------------------------
-        ! Function that ensure the new object will not appear too near from another one
-
-        function is_too_near_from_another(x, y, z, x_L, y_L, z_L, N)
-            integer, intent(in   )               :: N
-            real,    intent(in   )               :: x,y,z
-            real,    intent(in   ), dimension(N) :: x_L, y_L, z_L
-            logical                              :: is_too_near_from_another
-            real                                 :: volume, distance, eps
-            real                                 :: PI = 3.14159
-            integer                              :: j
-
-            is_too_near_from_another = .false.
-            return
-
-            volume = 4./3. * PI
-
-            eps = volume / N ! get the volume occupied by one object
-            eps = eps**(1./3.) ! get the size of the volume occupied by object
-            eps = eps / 5 ! devide it by an arbitrary number
-            ! here 5 in order that local density cannot exceed 5 times homogenous density
-
-            ! looking at all existing objects
-            do j= 1,N
-
-                ! distance between the two objects
-                distance = sqrt((x-x_L(j))**2 + (y-y_L(j))**2 + (z-z_L(j))**2)  
-
-                ! if eps > distance > -eps -> reject (return true)
-                if (distance < eps .and. distance > -eps) then
-                    is_too_near_from_another = .true.
-                    return
-                end if
-            end do
-            is_too_near_from_another = .false.
-
-        end function is_too_near_from_another
-
         !----------------------------------------------------------------------------------------------------
         ! Computing next position, speed and acceleration using leap frog algorithm
 
-        subroutine next_state(p, v, a, t, m, dt, N, steps)
+        subroutine next_state(p, v, a, t, m, dt, N, steps, Ep, Ec, Et)
             real,    intent(inout), dimension(3, N, steps) :: p, v, a ! time t and t+1
             integer, intent(in   )                         :: t ! step
             real,    intent(in   ), dimension(N)           :: m 
             integer, intent(in   )                         :: N, steps
             real,    intent(in   )                         :: dt
+            real,    intent(  out)                         :: Ep, Ec, Et
             real,                   dimension(3,N)         :: pi,vi,ai ! initial state at t
             real,                   dimension(3,N)         :: p2, a2   ! intermediate state at t+1/2 
             real,                   dimension(3,N)         :: pf,vf,af ! final state at t+1
             integer                                        :: i
-            integer                                        :: omp_get_num_threads
+            ! integer                                        :: omp_get_num_threads
 
             pi = p(:,:,t)
             vi = v(:,:,t)   
@@ -283,78 +238,79 @@ program nbody
             p2 = 0
             a2 = 0
             
-            ! omp parallel firstprivate(pi, vi, ai, p2, a2, m, N, dt) reduction(+:pf,vf,af)
-            ! omp do schedule(dynamic,N)
             do i=1,N
-
-                ! if (i == 1 .and. t == 2) then
-                !     print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
-                ! end if
 
                 ! Compute p at t+1/2
                 p2(:,i) = pi(:,i) + vi(:,i) * dt/2.
 
-                ! Compute a at t+1/2
-                call acceleration(p2(:, :), m, i, N, a2(:, i), .false.)
+            end do
+
+            ! Compute a at t+1/2
+            call acceleration(p2(:, :), m, N, a2(:,:))
+
+            do i=1,N
 
                 ! Compute velocity at t+1
                 vf(:, i) = vi(:, i) + ai(:, i) * dt/2 + a2(:, i) * dt/2
 
+                Ec = Ec + 0.5 * m(i) * (vf(1, i)**2 + vf(2, i)**2 + vf(3, i)**2)
+
                 ! Position at t+1
                 pf(:, i) = p2(:, i) + vi(:, i) * dt/2
 
-                ! Compute a at i+1
-                call acceleration(pf(:, :), m, i, N, af(:, i), .false.)
-
             end do
+
+            ! Compute a at i+1
+            call acceleration(pf(:, :), m, N, af(:,:), Ep)
+
             ! omp end do
             ! omp end parallel
 
             p(:, :, t+1) = pf
             v(:, :, t+1) = vf
             a(:, :, t+1) = af
+            Et = Ep + Ec
 
         end subroutine next_state
 
         !----------------------------------------------------------------------------------------------------
         ! Compute the acceleration of a body considering the position of the others
 
-        subroutine acceleration(p, m, i, N, a, verbose)
+        subroutine acceleration(p, m, N, a, Ep)
             real,    intent(in   ), dimension(3, N) :: p
             real,    intent(in   ), dimension(N)    :: m
-            integer, intent(in   )                  :: i, N
-            real,    intent(  out), dimension(3)    :: a
-            real,                   dimension(3)    :: dist
+            integer, intent(in   )                  :: N
+            real,    intent(  out), dimension(3,N)  :: a
+            real,    intent(  out), optional        :: Ep
+            real                                    :: x, y, z
             real                                    :: G = 1, eps = 0.05
             real                                    :: r
-            integer                                 :: j
-            integer                                 :: omp_get_num_threads
-            logical, intent(in   )                  :: verbose
-
-            a = 0
+            integer                                 :: i, j
 
             ! Compute the acceleration of the i-th body
             !private(dist, r, eps, G, m) reduction(+:a)
             ! schedule(dynamic,N)
-            !$omp parallel
+            !$omp parallel reduction(+:Ep)
             !$omp do
-            do j=1,N
+            do i=1,N
+                do j=1,N
 
-                if (i == 1 .and. j == 1 .and. verbose .eqv. .true.) then
-                    print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
-                end if
+                    if (j==i) then
+                        cycle
+                    end if
+                    
+                    x = p(1,j) - p(1,i)
+                    y = p(2,j) - p(2,i)
+                    z = p(3,j) - p(3,i)
 
-                if (j==i) then
-                    cycle
-                end if
-                
-                
-                dist(:) = p(:,j) - p(:,i)
+                    r = sqrt(x*x + y*y + z*z + eps*eps)
 
-                r = sqrt(sum(dist**2) + eps**2)
+                    a(1, i) = a(1, i) + x * G * m(j) / r**3
+                    a(2, i) = a(2, i) + y * G * m(j) / r**3
+                    a(3, i) = a(3, i) + z * G * m(j) / r**3
 
-                a(:) = dist(:) * G * m(j) / r**3
-
+                    Ep = Ep - 0.5 * G * m(j)**2 / r
+                end do
             end do
             !$omp end do
             !$omp end parallel
@@ -364,54 +320,57 @@ program nbody
         !----------------------------------------------------------------------------------------------------
         ! Compute the energy of the system
 
-        function potential_energy(p, m, N)
+        ! function potential_energy(p, m, N)
         
-            real,    intent(in   ), dimension(3, N) :: p
-            real,    intent(in   ), dimension(N)    :: m
-            integer, intent(in   )                  :: N
-            real,                   dimension(3)    :: a, b, dist
-            real                                    :: potential_energy
-            real                                    :: G=1, eps = 0.05
-            real                                    :: r
-            integer                                 :: i, j, k
+        !     real,    intent(in   ), dimension(3, N) :: p
+        !     real,    intent(in   ), dimension(N)    :: m
+        !     integer, intent(in   )                  :: N
+        !     real,                   dimension(3)    :: a, b, dist
+        !     real                                    :: potential_energy
+        !     real                                    :: G=1, eps = 0.05
+        !     real                                    :: r
+        !     integer                                 :: i, j, k
 
-            potential_energy = 0
+        !     potential_energy = 0
 
-            do i=1,N
-                do j=1,N
-                    if (j==i) then
-                        cycle
-                    end if
+        !     !$omp parallel
+        !     !$omp do
+        !     do i=1,N
+        !         do j=1,N
+        !             if (j==i) then
+        !                 cycle
+        !             end if
 
-                    dist(:) = p(:,j) - p(:,j)
+        !             dist(:) = p(:,j) - p(:,j)
 
-                    r = sqrt(sum(dist**2) + eps**2)
+        !             r = sqrt(sum(dist**2) + eps**2)
 
-                    potential_energy = potential_energy - 0.5 * G * m(j)**2 / r
-                end do
-            end do
+        !         end do
+        !     end do
+        !     !$omp parallel
+        !     !$omp do
 
-        end function potential_energy
+        ! end function potential_energy
 
         !----------------------------------------------------------------------------------------------------
         ! Compute the kinetic energy of the system
 
-        function kinetic_energy(v, m, N)
+        ! function kinetic_energy(v, m, N)
         
-            real,    intent(in   ), dimension(3, N) :: v
-            real,    intent(in   ), dimension(N)    :: m
-            integer, intent(in   )                  :: N
-            real                                    :: kinetic_energy
-            integer                                 :: i
+        !     real,    intent(in   ), dimension(3, N) :: v
+        !     real,    intent(in   ), dimension(N)    :: m
+        !     integer, intent(in   )                  :: N
+        !     real                                    :: kinetic_energy
+        !     integer                                 :: i
 
-            kinetic_energy = 0
+        !     kinetic_energy = 0
 
-            ! Ec = sum on i of 1/2 * m_i * v_i^2
-            do i=1,N
-                kinetic_energy = kinetic_energy + 0.5 * m(i) * sum(v(:, i)**2)
-            end do
+        !     ! Ec = sum on i of 1/2 * m_i * v_i^2
+        !     do i=1,N
+        !         kinetic_energy = kinetic_energy + 0.5 * m(i) * sum(v(:, i)**2)
+        !     end do
 
-        end function kinetic_energy
+        ! end function kinetic_energy
 
         !----------------------------------------------------------------------------------------------------
         ! Get the barycenter

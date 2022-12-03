@@ -1,3 +1,5 @@
+iterations = 10
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,7 +13,7 @@ if not os.path.isfile("data/speedup.txt"):
 N = multiprocessing.cpu_count()
 
 print("\n🔎 Retrieving results...")
-speeds = np.empty(N*10)
+speeds = np.empty(N*iterations)
 with open("data/speedup.txt") as f:
 
     i=0
@@ -27,28 +29,44 @@ with open("data/speedup.txt") as f:
         i+=1
         print(f"Execution took {time:3f} seconds on {i} threads")
 print("✅ Done!")
+speeds = speeds.reshape(iterations,N)
 
 mean_speeds = np.empty(N)
 std_speeds = np.empty(N)
 for i in range(N):
-    mean_speeds[i] = np.mean(speeds[i*10:(i+1)*10])
-    std_speeds[i] = np.std(speeds[i*10:(i+1)*10])
+    mean_speeds[i] = np.mean(speeds[:,i])
+    std_speeds[i] = np.std(speeds[:,i])
+
+speedups = np.empty_like(speeds)
+
+for i in range(iterations):
+    speedups[i,:] = mean_speeds[0]/speeds[i,:]
+
+mean_speedups = np.empty(N)
+std_speedups = np.empty(N)
+for i in range(N):
+    mean_speedups[i] = np.mean(speedups[:,i])
+    std_speedups[i] = np.std(speedups[:,i])
 
 threads = np.arange(1,N+1)
 
 print("\n⚙️ Generating plot...")
 fig = plt.figure()
-plt.subplot(121)
-plt.errorbar(threads, mean_speeds, std_speeds)
-plt.plot(threads, mean_speeds, "ob")
-plt.title("Execution time")
-plt.xlabel("Number of threads")
-plt.ylabel("Time [s]")
+# plt.subplot(121)
+# for i in range(iterations):
+#     plt.plot(threads,speeds[i,:],"r", alpha=0.3)
+# plt.errorbar(threads, mean_speeds, std_speeds)
+# plt.plot(threads, mean_speeds, "ob")
+# plt.title("Execution time")
+# plt.xlabel("Number of threads")
+# plt.ylabel("Time [s]")
 # plt.grid()
 
-plt.subplot(122)
-plt.errorbar(threads, mean_speeds[0] / mean_speeds, std_speeds[0] + std_speeds)
-plt.plot(threads, mean_speeds[0] / mean_speeds, "ob")
+# plt.subplot(122)
+for i in range(iterations):
+    plt.plot(threads,speedups[i,:],"r", alpha=0.3)
+# plt.errorbar(threads, mean_speedups, std_speedups)
+# plt.plot(threads, mean_speedups, "ob")
 plt.title("Speedup")
 plt.xlabel("Number of threads")
 plt.ylabel("Speedup")
