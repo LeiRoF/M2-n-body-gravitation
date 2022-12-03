@@ -282,13 +282,13 @@ program nbody
             p2 = 0
             a2 = 0
             
-            !$OMP PARALLEL
-            !$OMP DO FIRSTPRIVATE(pi, vi, ai, p2, a2, m, N, dt) REDUCTION(+:pf,vf,af)
+            ! omp parallel firstprivate(pi, vi, ai, p2, a2, m, N, dt) reduction(+:pf,vf,af)
+            ! omp do schedule(dynamic,N)
             do i=1,N
 
-                if (i == 1 .and. t == 2) then
-                    print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
-                end if
+                ! if (i == 1 .and. t == 2) then
+                !     print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
+                ! end if
 
                 ! Compute p at t+1/2
                 p2(:,i) = pi(:,i) + vi(:,i) * dt/2.
@@ -306,8 +306,8 @@ program nbody
                 call acceleration(pf(:, :), m, i, N, af(:, i), .false.)
 
             end do
-            !$OMP END DO
-            !$OMP END PARALLEL
+            ! omp end do
+            ! omp end parallel
 
             p(:, :, t+1) = pf
             v(:, :, t+1) = vf
@@ -330,19 +330,16 @@ program nbody
             integer                                 :: omp_get_num_threads
             logical, intent(in   )                  :: verbose
 
-            ! print *, "--------------------------------------------------"
-            ! print *, "p_i = ", i, " | ", p(i,:)
-            ! print *, " "
-
             a = 0
 
-            ! Compute a at i+1
-            ! OMP PARALLEL DO REDUCTION(+:a) FIRSTPRIVATE(p, m, i, N, G, eps, r, dist)
+            ! Compute the acceleration of the i-th body
+            !$omp parallel private(dist, r, eps, G, m) reduction(+:a)
+            !$omp do schedule(dynamic,N)
             do j=1,N
 
-                ! if (i == 1 .and. j == 1 .and. verbose .eqv. .true.) then
-                !     print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
-                ! end if
+                if (i == 1 .and. j == 1 .and. verbose .eqv. .true.) then
+                    print *, "NBody simulation with OpenMP, using ", omp_get_num_threads(), " threads"
+                end if
 
                 if (j==i) then
                     cycle
@@ -353,12 +350,11 @@ program nbody
 
                 r = sqrt(sum(dist**2) + eps**2)
 
-                a(:) = a(:) + dist(:) * G * m(j) / r**3
+                a(:) = dist(:) * G * m(j) / r**3
 
-                ! Compute the potential energy
-                ! ep = ep - 0.5*gg*m**2/r
             end do
-            ! OMP END PARALLEL DO
+            !$omp end do
+            !$omp end parallel
 
         end subroutine acceleration
 

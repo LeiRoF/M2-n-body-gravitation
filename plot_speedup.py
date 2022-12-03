@@ -47,7 +47,7 @@ plt.ylabel("Time [s]")
 # plt.grid()
 
 plt.subplot(122)
-plt.errorbar(threads, mean_speeds[0] / mean_speeds, std_speeds[0] / mean_speeds)
+plt.errorbar(threads, mean_speeds[0] / mean_speeds, std_speeds[0] + std_speeds)
 plt.plot(threads, mean_speeds[0] / mean_speeds, "ob")
 plt.title("Speedup")
 plt.xlabel("Number of threads")
