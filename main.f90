@@ -267,7 +267,9 @@ program nbody
             real,    intent(in   ), dimension(N)           :: m 
             integer, intent(in   )                         :: N, steps
             real,    intent(in   )                         :: dt
-            real,                   dimension(3,N)         :: pi,vi,ai, pf,vf,af, tmp_p, tmp_a ! time t+1/2
+            real,                   dimension(3,N)         :: pi,vi,ai ! initial state at t
+            real,                   dimension(3,N)         :: p2, a2   ! intermediate state at t+1/2 
+            real,                   dimension(3,N)         :: pf,vf,af ! final state at t+1
             integer                                        :: i
             integer                                        :: omp_get_num_threads
 
@@ -277,12 +279,11 @@ program nbody
             pf = 0
             vf = 0
             af = 0
-            tmp_p = 0
-            tmp_a = 0
+            p2 = 0
+            a2 = 0
             
-            !SCHEDULE(GUIDED) FIRSTPRIVATE(tmp_p, tmp_a, pi, vi, ai, m, N, dt) REDUCTION(+:pf,vf,af)
-            ! OMP PARALLEL
-            ! OMP DO SCHEDULE(DYNAMIC,N)
+            !$OMP PARALLEL
+            !$OMP DO FIRSTPRIVATE(pi, vi, ai, p2, a2, m, N, dt) REDUCTION(+:pf,vf,af)
             do i=1,N
 
                 if (i == 1 .and. t == 2) then
@@ -290,23 +291,23 @@ program nbody
                 end if
 
                 ! Compute p at t+1/2
-                tmp_p(:,i) = pi(:,i) + vi(:,i) * dt/2.
+                p2(:,i) = pi(:,i) + vi(:,i) * dt/2.
 
                 ! Compute a at t+1/2
-                call acceleration(tmp_p(:, :), m, i, N, tmp_a(:, i), .false.)
+                call acceleration(p2(:, :), m, i, N, a2(:, i), .false.)
 
                 ! Compute velocity at t+1
-                vf(:, i) = vi(:, i) + ai(:, i) * dt/2 + tmp_a(:, i) * dt/2
+                vf(:, i) = vi(:, i) + ai(:, i) * dt/2 + a2(:, i) * dt/2
 
                 ! Position at t+1
-                pf(:, i) = tmp_p(:, i) + vi(:, i) * dt/2
+                pf(:, i) = p2(:, i) + vi(:, i) * dt/2
 
                 ! Compute a at i+1
                 call acceleration(pf(:, :), m, i, N, af(:, i), .false.)
 
             end do
-            ! OMP END DO
-            ! OMP END PARALLEL
+            !$OMP END DO
+            !$OMP END PARALLEL
 
             p(:, :, t+1) = pf
             v(:, :, t+1) = vf
