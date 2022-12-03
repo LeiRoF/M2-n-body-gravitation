@@ -11,7 +11,7 @@ if not os.path.isfile("data/speedup.txt"):
 N = multiprocessing.cpu_count()
 
 print("\n🔎 Retrieving results...")
-speeds = np.empty(N)
+speeds = np.empty(N*10)
 with open("data/speedup.txt") as f:
 
     i=0
@@ -28,21 +28,31 @@ with open("data/speedup.txt") as f:
         print(f"Execution took {time:3f} seconds on {i} threads")
 print("✅ Done!")
 
+mean_speeds = np.empty(N)
+std_speeds = np.empty(N)
+for i in range(N):
+    mean_speeds[i] = np.mean(speeds[i*10:(i+1)*10])
+    std_speeds[i] = np.std(speeds[i*10:(i+1)*10])
+
+threads = np.arange(1,N+1)
+
 print("\n⚙️ Generating plot...")
 fig = plt.figure()
 plt.subplot(121)
-plt.plot(np.arange(N),speeds)
+plt.errorbar(threads, mean_speeds, std_speeds)
+plt.plot(threads, mean_speeds, "ob")
 plt.title("Execution time")
 plt.xlabel("Number of threads")
 plt.ylabel("Time [s]")
-plt.grid()
+# plt.grid()
 
 plt.subplot(122)
-plt.plot(np.arange(N),speeds[0] / speeds)
+plt.errorbar(threads, mean_speeds[0] / mean_speeds, std_speeds[0] / mean_speeds)
+plt.plot(threads, mean_speeds[0] / mean_speeds, "ob")
 plt.title("Speedup")
 plt.xlabel("Number of threads")
 plt.ylabel("Speedup")
-plt.grid()
+# plt.grid()
 print("✅ Done!")
 
 print("\n💾 Saving picture...")
