@@ -231,6 +231,7 @@ program nbody
             logical                              :: is_too_near_from_another
             real                                 :: volume, distance, eps
             real                                 :: PI = 3.14159
+            integer                              :: j
 
             is_too_near_from_another = .false.
             return
@@ -243,10 +244,10 @@ program nbody
             ! here 5 in order that local density cannot exceed 5 times homogenous density
 
             ! looking at all existing objects
-            do i= 1,N
+            do j= 1,N
 
                 ! distance between the two objects
-                distance = sqrt((x-x_L(i))**2 + (y-y_L(i))**2 + (z-z_L(i))**2)  
+                distance = sqrt((x-x_L(j))**2 + (y-y_L(j))**2 + (z-z_L(j))**2)  
 
                 ! if eps > distance > -eps -> reject (return true)
                 if (distance < eps .and. distance > -eps) then
@@ -333,8 +334,10 @@ program nbody
             a = 0
 
             ! Compute the acceleration of the i-th body
-            !$omp parallel private(dist, r, eps, G, m) reduction(+:a)
-            !$omp do schedule(dynamic,N)
+            !private(dist, r, eps, G, m) reduction(+:a)
+            ! schedule(dynamic,N)
+            !$omp parallel
+            !$omp do
             do j=1,N
 
                 if (i == 1 .and. j == 1 .and. verbose .eqv. .true.) then
