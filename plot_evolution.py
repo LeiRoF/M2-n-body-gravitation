@@ -21,10 +21,10 @@ N = int(N)
 steps = int(steps)
 
 energies = np.loadtxt("data/energies.txt")
-bodies = np.loadtxt("data/nbody.txt")
+bodies = np.loadtxt("data/positions.txt")
 barycenter = np.loadtxt("data/barycenter.txt")
 
-bodies = bodies.reshape(steps, N, 9)
+bodies = bodies.reshape(steps, N, 3)
 
 print("✅ Done!")
 
@@ -52,11 +52,11 @@ fig = plt.figure()
 
 ax_energy = fig.add_subplot(234)
 ax_energy.set_title('Energies')
-ax_energy.plot(np.arange(steps),energies[:,1],label="Potential")
+ax_energy.plot(np.arange(steps),energies[:,0],label="Potential")
 ax_energy.legend()
-ax_energy.plot(np.arange(steps),energies[:,2],label="Kinetic")
+ax_energy.plot(np.arange(steps),energies[:,1],label="Kinetic")
 ax_energy.legend()
-ax_energy.plot(np.arange(steps),energies[:,3],label="Total")
+ax_energy.plot(np.arange(steps),energies[:,2],label="Total")
 ax_energy.legend()
 
 # ----------------------------------------------------------------------------------------------------
@@ -95,7 +95,7 @@ ax_barycenter.set_ylabel('y')
 ax_barycenter.set_zlabel('z')
 ax_barycenter.set_title('Barycenter')
 
-graph_barycenter = ax_barycenter.scatter([barycenter[0, 1]], [barycenter[0, 2]], [barycenter[0, 3]])
+graph_barycenter = ax_barycenter.scatter([barycenter[0, 0]], [barycenter[0, 1]], [barycenter[0, 2]])
 
 # ----------------------------------------------------------------------------------------------------
 # 3D plots
@@ -115,7 +115,7 @@ graph = ax.scatter(bodies[0,:,0], bodies[0,:,1], bodies[0,:,2], c = np.arange(N)
 def update_graph(t):
     graph._offsets3d = (bodies[t,:,0], bodies[t,:,1], bodies[t,:,2])
     title.set_text('Time={}'.format(t))
-    graph_barycenter._offsets3d = ([barycenter[t, 1]], [barycenter[t, 2]], [barycenter[t, 3]])
+    graph_barycenter._offsets3d = ([barycenter[t, 0]], [barycenter[t, 1]], [barycenter[t, 2]])
     
     tmp = deepcopy(bodies[t,:,:2]) # x,y 
     graph2.set_offsets(tmp)

@@ -7,10 +7,10 @@ program nbody
 
     ! Safe to edit
     integer, parameter :: N = 1000 ! number of bodies
-    integer, parameter :: steps = 1000 ! simulation time in steps
+    integer, parameter :: steps = 100 ! simulation time in steps
     real, parameter    :: dt = 0.1 ! time step in seconds
     ! logical            :: use_initial_conditions = .false. ! set to .true. to generate new initial conditions
-    ! logical            :: verbose = .false.
+    logical            :: verbose = .true.
     ! logical            :: save_results = .true. ! set to .false. to disable saving results (for bulk runs)
 
     !----------------------------------------------------------------------------------------------------
@@ -76,7 +76,7 @@ program nbody
     !----------------------------------------------------------------------------------------------------
     ! Initial accelerations
 
-    call acceleration(x, y, z, N, ax, ay, az, Ep)
+    call acceleration(x, y, z, N, ax, ay, az, Ep, verbose)
 
     !----------------------------------------------------------------------------------------------------
     ! Initial energies
@@ -103,41 +103,45 @@ program nbody
     bz = bz / N
 
     !----------------------------------------------------------------------------------------------------
+    ! Saving initial conditions
+
+    do i=1,N
+        write(10, *) x(i), y(i), z(i)
+        write(11, *) vx(i), vy(i), vz(i)
+        write(12, *) ax(i), ay(i), az(i)
+    end do
+    write(13, *) Ep, Ec, Et
+    write(14, *) bx, by, bz
+
+    
+    if (verbose .eqv. .true.) then
+        print *, 'Step ', 1 , ' of ', steps, ' completed'
+    end if
+
+    !----------------------------------------------------------------------------------------------------
     ! Main loop
 
-    do t=1,steps
-
-        !------------------------------
-        ! Position at t+1/2
-        do i=1,N
-            x2(i) = x(i) + vx(i) * dt/2. 
-            y2(i) = y(i) + vy(i) * dt/2.
-            z2(i) = z(i) + vz(i) * dt/2.
-        end do
-
-        !------------------------------
-        ! Acceleration at t+1/2
-        call acceleration(x2, y2, z2, N, ax2, ay2, az2)
-
-        !------------------------------
-        ! Compute velocity at t+1
-        do i=1,N
-            vx(i) = vx(i) + ax(i) * dt/2 + ax2(i) * dt/2
-            vy(i) = vy(i) + ay(i) * dt/2 + ay2(i) * dt/2
-            vz(i) = vz(i) + az(i) * dt/2 + az2(i) * dt/2
-        end do
+    do t=2,steps
 
         !------------------------------
         ! Position at t+1
         do i=1,N
-            x(i) = x2(i) + vx(i) * dt/2
-            y(i) = y2(i) + vy(i) * dt/2
-            z(i) = z2(i) + vz(i) * dt/2
+            x(i) = x(i) + vx(i) * dt
+            y(i) = y(i) + vy(i) * dt
+            z(i) = z(i) + vz(i) * dt
+        end do
+
+        !------------------------------
+        ! Compute velocity at t+1
+        do i=1,N
+            vx(i) = vx(i) + ax(i) * dt
+            vy(i) = vy(i) + ay(i) * dt
+            vz(i) = vz(i) + az(i) * dt
         end do
 
         !------------------------------
         ! Acceleration at i+1
-        call acceleration(x, y, z, N, ax, ay, az, Ep)
+        call acceleration(x, y, z, N, ax, ay, az, Ep, .false.)
 
         !------------------------------
         ! Energy at t+1
@@ -162,13 +166,19 @@ program nbody
         bz = bz / N
 
         !------------------------------
-        ! Print results
+        ! Saving results
 
-        write(10, *) x, y, z
-        write(11, *) vx, vy, vz
-        write(12, *) ax, ay, az
+        do i=1,N
+            write(10, *) x(i), y(i), z(i)
+            write(11, *) vx(i), vy(i), vz(i)
+            write(12, *) ax(i), ay(i), az(i)
+        end do
         write(13, *) Ep, Ec, Et
         write(14, *) bx, by, bz
+
+        if (verbose .eqv. .true.) then
+            print *, 'Step ', t , ' of ', steps, ' completed'
+        end if
 
     end do
 
@@ -191,7 +201,7 @@ program nbody
         !----------------------------------------------------------------------------------------------------   
         ! Compute accelerations
 
-        subroutine acceleration(x, y, z, N, ax, ay, az, Ep)
+        subroutine acceleration(x, y, z, N, ax, ay, az, Ep, verbose)
             real,    intent(in   ), dimension(N) :: x, y, z
             real,    intent(out  ), dimension(N) :: ax, ay, az
             real,    intent(out  ), optional     :: Ep
@@ -199,6 +209,8 @@ program nbody
             real                                 :: m, G=1.0, eps=0.05
             real                                 :: dx, dy, dz, r
             integer                              :: i, j
+            logical, intent(in   )               :: verbose
+            integer                              :: omp_get_num_threads
 
             ax = 0
             ay = 0
@@ -209,6 +221,9 @@ program nbody
             ! omp parallel reduction(+:Ep)
             ! omp do
             do i=1,N
+                if (i .eq. 1 .and. verbose .eqv. .true.) then
+                    print *, 'Running on ', omp_get_num_threads(), ' threads'
+                end if
                 do j=1,N
                     if (j==i) then
                         cycle
@@ -224,11 +239,11 @@ program nbody
                     ay = ay + dy * G * m / (r**3)
                     az = az + dz * G * m / (r**3)
 
-                    Ep = ep - 0.5*G*m**2/r
+                    Ep = Ep - 0.5 * G * m*m / r
                 end do
             end do
-            ! omp parallel
-            ! omp do
+            ! omp end do
+            ! omp end parallel
 
         end subroutine acceleration
 
