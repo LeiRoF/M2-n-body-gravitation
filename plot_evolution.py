@@ -40,57 +40,63 @@ fig = plt.figure()
 # ----------------------------------------------------------------------------------------------------
 # All energies
 
-# ax_energy = fig.add_subplot(234)
-# ax_energy.set_title('Energies')
-# ax_energy.plot(np.arange(steps),energies[:,0],label="Potential")
-# ax_energy.legend()
-# ax_energy.plot(np.arange(steps),energies[:,1],label="Kinetic")
-# ax_energy.legend()
-# ax_energy.plot(np.arange(steps),energies[:,2],label="Total")
-# ax_energy.legend()
+ax_energy = fig.add_subplot(234)
+ax_energy.set_title('Energies')
+ax_energy.plot(np.arange(steps),energies[:,0],label="Potential")
+ax_energy.legend()
+ax_energy.plot(np.arange(steps),energies[:,1],label="Kinetic")
+ax_energy.legend()
+ax_energy.plot(np.arange(steps),energies[:,2],label="Total")
+ax_energy.legend()
 
 # ----------------------------------------------------------------------------------------------------
 # 2D plots
 
-# ax1 = fig.add_subplot(231)
-# ax2 = fig.add_subplot(232)
-# ax3 = fig.add_subplot(233)
+ax1 = fig.add_subplot(231)
+ax2 = fig.add_subplot(232)
+ax3 = fig.add_subplot(233)
 
-# ax2.set_title("2D projections")
+ax2.set_title("2D projections")
 
-# ax1.set_aspect(1)
-# ax2.set_aspect(1)
-# ax3.set_aspect(1)
+ax1.set_aspect(1)
+ax2.set_aspect(1)
+ax3.set_aspect(1)
 
-# ax1.set_xlabel('x')
-# ax1.set_ylabel('z')
+ax1.set_xlabel('x')
+ax1.set_ylabel('z')
 
-# ax2.set_xlabel('x')
-# ax2.set_ylabel('y')
+ax2.set_xlabel('x')
+ax2.set_ylabel('y')
 
-# ax3.set_xlabel('y')
-# ax3.set_ylabel('z')
+ax3.set_xlabel('y')
+ax3.set_ylabel('z')
 
-# graph1 = ax1.scatter(positions[0,:,0], positions[0,:,2], c = np.arange(N)/N, cmap = "hsv")
-# graph2 = ax2.scatter(positions[0,:,0], positions[0,:,1], c = np.arange(N)/N, cmap = "hsv")
-# graph3 = ax3.scatter(positions[0,:,1], positions[0,:,2], c = np.arange(N)/N, cmap = "hsv")
+acc_xy = accelerations[:,:,0]**2 + accelerations[:,:,1]**2
+acc_xz = accelerations[:,:,0]**2 + accelerations[:,:,2]**2
+acc_yz = accelerations[:,:,1]**2 + accelerations[:,:,2]**2
+graph1 = ax1.scatter(positions[0,:,0], positions[0,:,2], c = acc_xz[0,:], cmap = "gnuplot")
+graph2 = ax2.scatter(positions[0,:,0], positions[0,:,1], c = acc_xy[0,:], cmap = "gnuplot")
+graph3 = ax3.scatter(positions[0,:,1], positions[0,:,2], c = acc_yz[0,:], cmap = "gnuplot")
 
 # ----------------------------------------------------------------------------------------------------
 # Barycenter
 
-# ax_barycenter = fig.add_subplot(236, projection='3d')
+ax_barycenter = fig.add_subplot(236, projection='3d')
 
-# ax_barycenter.set_xlabel('x')
-# ax_barycenter.set_ylabel('y')
-# ax_barycenter.set_zlabel('z')
-# ax_barycenter.set_title('Barycenter')
+ax_barycenter.set_xlabel('x')
+ax_barycenter.set_ylabel('y')
+ax_barycenter.set_zlabel('z')
+ax_barycenter.set_title('Barycenter')
+ax_barycenter.set_xlim3d([-1.0, 1.0])
+ax_barycenter.set_ylim3d([-1.0, 1.0])
+ax_barycenter.set_zlim3d([-1.0, 1.0])
 
-# graph_barycenter = ax_barycenter.scatter([barycenter[0, 0]], [barycenter[0, 1]], [barycenter[0, 2]])
+graph_barycenter = ax_barycenter.scatter([barycenter[0, 0]], [barycenter[0, 1]], [barycenter[0, 2]])
 
 # ----------------------------------------------------------------------------------------------------
 # 3D plots
 
-ax = fig.add_subplot(111, projection='3d') #235
+ax = fig.add_subplot(235, projection='3d')
 title = ax.set_title('N-body gravitation')
 
 ax.set_xlabel('x')
@@ -106,18 +112,21 @@ def update_graph(t):
     graph._offsets3d = (positions[t,:,0], positions[t,:,1], positions[t,:,2])
     graph.set_array(np.sum(accelerations[t,:,:]**2,axis=-1))
     title.set_text('Time={}'.format(t))
-    # graph_barycenter._offsets3d = ([barycenter[t, 0]], [barycenter[t, 1]], [barycenter[t, 2]])
+    graph_barycenter._offsets3d = ([barycenter[t, 0]], [barycenter[t, 1]], [barycenter[t, 2]])
     
-    # tmp = deepcopy(positions[t,:,:2]) # x,y 
-    # graph2.set_offsets(tmp)
+    tmp = deepcopy(positions[t,:,:2]) # x,y 
+    graph2.set_offsets(tmp)
+    graph2.set_array(acc_xy[t,:])
 
-    # tmp[:,1] = deepcopy(positions[t,:,2]) # x,z
-    # graph1.set_offsets(tmp)
+    tmp[:,1] = deepcopy(positions[t,:,2]) # x,z
+    graph1.set_offsets(tmp)
+    graph1.set_array(acc_xz[t,:])
     
-    # tmp[:,0] = deepcopy(positions[t,:,1]) # y,z
-    # graph3.set_offsets(tmp)
+    tmp[:,0] = deepcopy(positions[t,:,1]) # y,z
+    graph3.set_offsets(tmp)
+    graph3.set_array(acc_yz[t,:])
 
-    return (graph)#, graph1, graph2, graph3), #, graph_barycenter
+    return (graph, graph1, graph2, graph3), #, graph_barycenter
 
 # ----------------------------------------------------------------------------------------------------
 # Generate animation
@@ -136,6 +145,6 @@ print("✅ Done")
 # ----------------------------------------------------------------------------------------------------
 # Saving animation
 
-print("\n🎞️ Exporting it as gif")
-ani.save("data/animation.gif")
+print("\n🎞️ Exporting it as mp4")
+ani.save("data/animation.mp4")
 print("✅ Done")

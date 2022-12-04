@@ -8,7 +8,7 @@ program nbody
     ! Safe to edit
     integer, parameter :: N = 1000 ! number of bodies
     integer, parameter :: steps = 1000 ! simulation time in steps
-    real, parameter    :: dt = 0.1 ! time step in seconds
+    real, parameter    :: dt = 0.01 ! time step in seconds
     ! logical            :: use_initial_conditions = .false. ! set to .true. to generate new initial conditions
     logical            :: verbose = .false.
     ! logical            :: save_results = .true. ! set to .false. to disable saving results (for bulk runs)
@@ -81,7 +81,7 @@ program nbody
 
     Ec = 0.0
     do i=1,N
-        Ec = Ec + 0.5 * (vx(i)**2 + vy(i)**2 + vz(i)**2)
+        Ec = Ec + 0.5 * (vx(i)**2 + vy(i)**2 + vz(i)**2) / N
     end do
     Et = Ec + Ep
 
