@@ -1,4 +1,4 @@
-iterations = 10
+iterations = 10  # edit also the ./src/speedup.sh script
 
 import os
 import numpy as np
@@ -10,7 +10,7 @@ import multiprocessing
 if not os.path.isfile("data/speedup.txt"):
     import run
 
-N = multiprocessing.cpu_count()
+N = multiprocessing.cpu_count() + 3
 
 print("\n🔎 Retrieving results...")
 speeds = np.empty(N*iterations)
@@ -29,7 +29,7 @@ with open("data/speedup.txt") as f:
         i+=1
         print(f"Execution took {time:3f} seconds on {i} threads")
 print("✅ Done!")
-speeds = speeds.reshape(iterations,N)
+speeds = speeds.reshape(N, iterations)
 
 mean_speeds = np.empty(N)
 std_speeds = np.empty(N)

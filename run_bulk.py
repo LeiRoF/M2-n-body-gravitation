@@ -22,6 +22,6 @@ print("\n🏃 Running simulation with different amount of threads...")
 if os.name == 'nt':
     os.system(r"powershell .\src\speedup.ps1")
 else:
-    os.system("src/speedup.sh")
+    os.system("./src/speedup.sh")
 
 print("✅ Done!")

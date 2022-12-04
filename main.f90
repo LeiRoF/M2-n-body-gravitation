@@ -7,10 +7,10 @@ program nbody
 
     ! Safe to edit
     integer, parameter :: N = 1000 ! number of bodies
-    integer, parameter :: steps = 100 ! simulation time in steps
+    integer, parameter :: steps = 1000 ! simulation time in steps
     real, parameter    :: dt = 0.1 ! time step in seconds
     ! logical            :: use_initial_conditions = .false. ! set to .true. to generate new initial conditions
-    logical            :: verbose = .true.
+    logical            :: verbose = .false.
     ! logical            :: save_results = .true. ! set to .false. to disable saving results (for bulk runs)
 
     !----------------------------------------------------------------------------------------------------
@@ -20,10 +20,8 @@ program nbody
     integer                    :: i, t
     real                       :: PI
     real, dimension(N)         :: x, y, z
-    real, dimension(N)         :: x2, y2, z2
     real, dimension(N)         :: vx, vy, vz
     real, dimension(N)         :: ax, ay, az
-    real, dimension(N)         :: ax2, ay2, az2
     real                       :: Ep, Ec, Et
     real                       :: bx, by, bz ! barycenter
     logical                    :: lock
@@ -126,17 +124,17 @@ program nbody
         !------------------------------
         ! Position at t+1
         do i=1,N
-            x(i) = x(i) + vx(i) * dt
-            y(i) = y(i) + vy(i) * dt
-            z(i) = z(i) + vz(i) * dt
+            x(i) = x(i) + vx(i) * dt + 0.5 * ax(i) * dt**2
+            y(i) = y(i) + vy(i) * dt + 0.5 * ay(i) * dt**2
+            z(i) = z(i) + vz(i) * dt + 0.5 * az(i) * dt**2
         end do
 
         !------------------------------
         ! Compute velocity at t+1
         do i=1,N
-            vx(i) = vx(i) + ax(i) * dt
-            vy(i) = vy(i) + ay(i) * dt
-            vz(i) = vz(i) + az(i) * dt
+            vx(i) = vx(i) + ax(i) * dt * 0.5
+            vy(i) = vy(i) + ay(i) * dt * 0.5
+            vz(i) = vz(i) + az(i) * dt * 0.5
         end do
 
         !------------------------------
@@ -144,10 +142,18 @@ program nbody
         call acceleration(x, y, z, N, ax, ay, az, Ep, .false.)
 
         !------------------------------
+        ! Compute velocity at t+1
+        do i=1,N
+            vx(i) = vx(i) + ax(i) * dt * 0.5
+            vy(i) = vy(i) + ay(i) * dt * 0.5
+            vz(i) = vz(i) + az(i) * dt * 0.5
+        end do
+
+        !------------------------------
         ! Energy at t+1
         Ec = 0.0
         do i=1,N
-            Ec = Ec + 0.5 * (vx(i)**2 + vy(i)**2 + vz(i)**2)
+            Ec = Ec + 0.5 * (vx(i)**2 + vy(i)**2 + vz(i)**2) / N
         end do
         Et = Ec + Ep
 
@@ -212,20 +218,22 @@ program nbody
             logical, intent(in   )               :: verbose
             integer                              :: omp_get_num_threads
 
+            Ep = 0
+            m = 1.0/N
             ax = 0
             ay = 0
             az = 0
-            Ep = 0
-            m = 1.0/N
 
             ! omp parallel reduction(+:Ep)
             ! omp do
             do i=1,N
+
                 if (i .eq. 1 .and. verbose .eqv. .true.) then
                     print *, 'Running on ', omp_get_num_threads(), ' threads'
                 end if
+
                 do j=1,N
-                    if (j==i) then
+                    if (j .eq. i) then
                         cycle
                     end if
                     
@@ -235,16 +243,16 @@ program nbody
 
                     r = sqrt(dx*dx + dy*dy + dz*dz + eps*eps)
 
-                    ax = ax + dx * G * m / (r**3)
-                    ay = ay + dy * G * m / (r**3)
-                    az = az + dz * G * m / (r**3)
+                    ax(i) = ax(i) + dx * G * m / (r**3)
+                    ay(i) = ay(i) + dy * G * m / (r**3)
+                    az(i) = az(i) + dz * G * m / (r**3)
 
                     Ep = Ep - 0.5 * G * m*m / r
                 end do
+
             end do
             ! omp end do
             ! omp end parallel
-
         end subroutine acceleration
 
 
