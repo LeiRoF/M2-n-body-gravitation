@@ -6,7 +6,7 @@ program nbody
     ! Config
 
     ! Safe to edit
-    integer, parameter :: N = 1000 ! number of bodies
+    integer, parameter :: N = 2000 ! number of bodies
     integer, parameter :: steps = 1000 ! simulation time in steps
     real, parameter    :: dt = 0.01 ! time step in seconds
     ! logical            :: use_initial_conditions = .false. ! set to .true. to generate new initial conditions
@@ -224,18 +224,18 @@ program nbody
             ay = 0
             az = 0
 
-            ! omp parallel reduction(+:Ep)
-            ! omp do
+            !$omp parallel reduction(+:Ep) private(dx,dy,dz,r,G,m,eps,i,j) firstprivate(x,y,z,N) shared(ax,ay,az)
+            !$omp do schedule(auto)
             do i=1,N
+                G=1.0
+                eps=0.05
+                m = 1./N
 
                 if (i .eq. 1 .and. verbose .eqv. .true.) then
                     print *, 'Running on ', omp_get_num_threads(), ' threads'
                 end if
 
-                do j=1,N
-                    if (j .eq. i) then
-                        cycle
-                    end if
+                do j=i+1,N
                     
                     dx = x(j) - x(i)
                     dy = y(j) - y(i)
@@ -247,12 +247,18 @@ program nbody
                     ay(i) = ay(i) + dy * G * m / (r**3)
                     az(i) = az(i) + dz * G * m / (r**3)
 
-                    Ep = Ep - 0.5 * G * m*m / r
+                    ax(j) = ax(j) - dx * G * m / (r**3)
+                    ay(j) = ay(j) - dy * G * m / (r**3)
+                    az(j) = az(j) - dz * G * m / (r**3)
+
+                    Ep = Ep - G * m*m / r
                 end do
 
             end do
-            ! omp end do
-            ! omp end parallel
+            !$omp end do
+            !$omp end parallel
+
+            
         end subroutine acceleration
 
 
