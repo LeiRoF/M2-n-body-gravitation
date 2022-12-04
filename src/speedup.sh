@@ -10,7 +10,7 @@ N=$(($N + 3))
 for i in $(seq 1 $N)
 do
     echo "Running with $i threads over $N ($(nproc --all) logical core + 3 hyperthreading)"
-    for j in {1..$iterations}
+    for j in $(seq 1 $iterations)
     do
         echo "   Iteration $j on $iterations"
         export OMP_NUM_THREADS=$i
