@@ -221,6 +221,8 @@ program nbody
                     r = sqrt(dx*dx + dy*dy + dz*dz + eps*eps)
 
                     ax = ax + dx * G * m / (r**3)
+                    ay = ay + dy * G * m / (r**3)
+                    az = az + dz * G * m / (r**3)
 
                     Ep = ep - 0.5*G*m**2/r
                 end do
