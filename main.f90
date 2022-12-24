@@ -6,8 +6,8 @@ program nbody
     ! Config
 
     ! Safe to edit
-    integer, parameter :: N = 2000 ! number of bodies
-    integer, parameter :: steps = 1000 ! simulation time in steps
+    integer, parameter :: N = 10000 ! number of bodies
+    integer, parameter :: steps = 100 ! simulation time in steps
     real, parameter    :: dt = 0.01 ! time step in seconds
     ! logical            :: use_initial_conditions = .false. ! set to .true. to generate new initial conditions
     logical            :: verbose = .false.
@@ -241,13 +241,9 @@ program nbody
             ay = 0
             az = 0
 
-            !$omp parallel reduction(+:Ep,ax,ay,az) private(dx,dy,dz,r,G,m,eps,i,j) firstprivate(x,y,z,N)
-            !$omp do schedule(auto)
+            !$omp parallel reduction(+:Ep,ax,ay,az) private(dx,dy,dz,r,i,j) firstprivate(G,m,eps,x,y,z,N)
+            !$omp do schedule(guided)
             do i=1,N
-                G=1.0
-                eps=0.05
-                m = 1./N
-
                 do j=1,N
 
                     if (i .eq. j) cycle
@@ -263,8 +259,8 @@ program nbody
                     az(i) = az(i) + dz * G * m / (r**3)
 
                     Ep = Ep - 0.5 * G * m*m / r
-                end do
 
+                end do
             end do
             !$omp end do
             !$omp end parallel
@@ -291,13 +287,9 @@ program nbody
             ay = 0
             az = 0
 
-            !$omp parallel reduction(+:Ep) private(dx,dy,dz,r,G,m,eps,i,j) firstprivate(x,y,z,N) shared(ax,ay,az)
-            !$omp do schedule(auto)
+            !$omp parallel reduction(+:Ep,ax,ay,az) private(dx,dy,dz,r,i,j) firstprivate(G,m,eps,x,y,z,N)
+            !$omp do schedule(guided)
             do i=1,N
-                G=1.0
-                eps=0.05
-                m = 1./N
-
                 do j=i+1,N
                     
                     dx = x(j) - x(i)
@@ -316,7 +308,6 @@ program nbody
 
                     Ep = Ep - G * m*m / r
                 end do
-
             end do
             !$omp end do
             !$omp end parallel

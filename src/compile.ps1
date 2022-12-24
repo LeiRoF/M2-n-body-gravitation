@@ -1,1 +1,0 @@
-gfortran -O3 -fopenmp .\main.f90 -o .\data\main.exe
