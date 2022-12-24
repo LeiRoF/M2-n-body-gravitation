@@ -34,19 +34,19 @@ That's it!
    1. Run the program once, with all threads
 
         ```bash
-        python run.py
+        python run.sh
         ```
     2. Plot the evolution
     
         ```bash
-        python plot_evolution.py
+        python plot.py
         ```
 2. If you want to see the speedup over threads:
 
     1. Run the program with all threads
 
         ```bash
-        python run_bulk.py
+        python run_speedup.sh
         ```
     2. Plot the speedup
     

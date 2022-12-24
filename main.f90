@@ -12,6 +12,7 @@ program nbody
     ! logical            :: use_initial_conditions = .false. ! set to .true. to generate new initial conditions
     logical            :: verbose = .false.
     ! logical            :: save_results = .true. ! set to .false. to disable saving results (for bulk runs)
+    integer            :: method = 1 ! Method to compute acceleration. Complexity 1: N^2 , 2: N^2 /2
 
     !----------------------------------------------------------------------------------------------------
     ! Other declarations
@@ -25,8 +26,16 @@ program nbody
     real                       :: Ep, Ec, Et
     real                       :: bx, by, bz ! barycenter
     logical                    :: lock
+    integer                    :: omp_get_num_threads
 
     PI = acos(-1.0)
+
+    ! Verification that the program well run on desired number of threads
+    !$omp parallel
+    if (i .eq. 1 .and. verbose .eqv. .true.) then
+        print *, 'Running on ', omp_get_num_threads(), ' threads'
+    end if
+    !$omp end parallel
 
     !----------------------------------------------------------------------------------------------------
     ! Output files
@@ -74,7 +83,11 @@ program nbody
     !----------------------------------------------------------------------------------------------------
     ! Initial accelerations
 
-    call acceleration(x, y, z, N, ax, ay, az, Ep, verbose)
+    if (method .eq. 1) then
+        call acceleration(x, y, z, N, ax, ay, az, Ep)
+    else if (method .eq. 2) then
+        call acceleration2(x, y, z, N, ax, ay, az, Ep)
+    end if
 
     !----------------------------------------------------------------------------------------------------
     ! Initial energies
@@ -139,7 +152,12 @@ program nbody
 
         !------------------------------
         ! Acceleration at i+1
-        call acceleration(x, y, z, N, ax, ay, az, Ep, .false.)
+
+        if (method .eq. 1) then
+            call acceleration(x, y, z, N, ax, ay, az, Ep)
+        else if (method .eq. 2) then
+            call acceleration2(x, y, z, N, ax, ay, az, Ep)
+        end if
 
         !------------------------------
         ! Compute velocity at t+1
@@ -207,7 +225,7 @@ program nbody
         !----------------------------------------------------------------------------------------------------   
         ! Compute accelerations
 
-        subroutine acceleration(x, y, z, N, ax, ay, az, Ep, verbose)
+        subroutine acceleration(x, y, z, N, ax, ay, az, Ep)
             real,    intent(in   ), dimension(N) :: x, y, z
             real,    intent(out  ), dimension(N) :: ax, ay, az
             real,    intent(out  ), optional     :: Ep
@@ -215,7 +233,56 @@ program nbody
             real                                 :: m, G=1.0, eps=0.05
             real                                 :: dx, dy, dz, r
             integer                              :: i, j
-            logical, intent(in   )               :: verbose
+            integer                              :: omp_get_num_threads
+
+            Ep = 0
+            m = 1.0/N
+            ax = 0
+            ay = 0
+            az = 0
+
+            !$omp parallel reduction(+:Ep,ax,ay,az) private(dx,dy,dz,r,G,m,eps,i,j) firstprivate(x,y,z,N)
+            !$omp do schedule(auto)
+            do i=1,N
+                G=1.0
+                eps=0.05
+                m = 1./N
+
+                do j=1,N
+
+                    if (i .eq. j) cycle
+                    
+                    dx = x(j) - x(i)
+                    dy = y(j) - y(i)
+                    dz = z(j) - z(i)
+
+                    r = sqrt(dx*dx + dy*dy + dz*dz + eps*eps)
+
+                    ax(i) = ax(i) + dx * G * m / (r**3)
+                    ay(i) = ay(i) + dy * G * m / (r**3)
+                    az(i) = az(i) + dz * G * m / (r**3)
+
+                    Ep = Ep - 0.5 * G * m*m / r
+                end do
+
+            end do
+            !$omp end do
+            !$omp end parallel
+
+            
+        end subroutine acceleration
+
+        !----------------------------------------------------------------------------------------------------   
+        ! Compute accelerations
+
+        subroutine acceleration2(x, y, z, N, ax, ay, az, Ep)
+            real,    intent(in   ), dimension(N) :: x, y, z
+            real,    intent(out  ), dimension(N) :: ax, ay, az
+            real,    intent(out  ), optional     :: Ep
+            integer, intent(in   )               :: N
+            real                                 :: m, G=1.0, eps=0.05
+            real                                 :: dx, dy, dz, r
+            integer                              :: i, j
             integer                              :: omp_get_num_threads
 
             Ep = 0
@@ -230,10 +297,6 @@ program nbody
                 G=1.0
                 eps=0.05
                 m = 1./N
-
-                if (i .eq. 1 .and. verbose .eqv. .true.) then
-                    print *, 'Running on ', omp_get_num_threads(), ' threads'
-                end if
 
                 do j=i+1,N
                     
@@ -259,7 +322,7 @@ program nbody
             !$omp end parallel
 
             
-        end subroutine acceleration
+        end subroutine acceleration2
 
 
 end program nbody
