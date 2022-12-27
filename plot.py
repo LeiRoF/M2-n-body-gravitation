@@ -7,10 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.animation
 
-# Run a simulation if no data is found
-if not os.path.isfile("data/parameters.txt"):
-    import run
-
 # ----------------------------------------------------------------------------------------------------
 # Retrieving data
 
@@ -35,7 +31,7 @@ print("✅ Done!")
 # ----------------------------------------------------------------------------------------------------
 # Create plot
 
-fig = plt.figure()
+fig = plt.figure(figsize=(18,12))
 
 # ----------------------------------------------------------------------------------------------------
 # All energies
@@ -145,6 +141,6 @@ print("✅ Done")
 # ----------------------------------------------------------------------------------------------------
 # Saving animation
 
-print("\n🎞️ Exporting it as mp4")
+print("\n🎞️ Exporting it as gif")
 ani.save("data/animation.mp4")
 print("✅ Done")

@@ -6,13 +6,13 @@ program nbody
     ! Config
 
     ! Safe to edit
-    integer, parameter :: N = 10000 ! number of bodies
-    integer, parameter :: steps = 100 ! simulation time in steps
+    integer, parameter :: N = 1000 ! number of bodies
+    integer, parameter :: steps = 1000 ! simulation time in steps
     real, parameter    :: dt = 0.01 ! time step in seconds
-    ! logical            :: use_initial_conditions = .false. ! set to .true. to generate new initial conditions
+    ! logical          :: use_initial_conditions = .false. ! set to .true. to generate new initial conditions
     logical            :: verbose = .false.
-    ! logical            :: save_results = .true. ! set to .false. to disable saving results (for bulk runs)
-    integer            :: method = 1 ! Method to compute acceleration. Complexity 1: N^2 , 2: N^2 /2
+    ! logical          :: save_results = .true. ! set to .false. to disable saving results (for bulk runs)
+    integer            :: method = 2 ! Method to compute acceleration. Complexity 1: N^2 , 2: N^2 /2
 
     !----------------------------------------------------------------------------------------------------
     ! Other declarations
@@ -233,7 +233,6 @@ program nbody
             real                                 :: m, G=1.0, eps=0.05
             real                                 :: dx, dy, dz, r
             integer                              :: i, j
-            integer                              :: omp_get_num_threads
 
             Ep = 0
             m = 1.0/N
@@ -279,7 +278,6 @@ program nbody
             real                                 :: m, G=1.0, eps=0.05
             real                                 :: dx, dy, dz, r
             integer                              :: i, j
-            integer                              :: omp_get_num_threads
 
             Ep = 0
             m = 1.0/N

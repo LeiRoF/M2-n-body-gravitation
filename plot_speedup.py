@@ -28,16 +28,16 @@ for i in range(times.shape[1]):
 
 threads = np.arange(1,N+1)
 
-print(times.shape)
-print(times[0].shape)
-print(threads)
+def amdahl(p, n):
+    return 1/(1-p+(p/n))
 
 print("\n⚙️ Generating plot...")
 fig = plt.figure(figsize=(12,6))
 plt.subplot(121)
 for i in times:
     plt.plot(threads, i,"r", alpha=0.3)
-plt.plot(threads, mean_times, "b")
+plt.plot(threads, mean_times, "b", label="Mean time")
+plt.legend()
 plt.title("Execution time")
 plt.xlabel("Number of threads")
 plt.ylabel("Time [s]")
@@ -46,7 +46,10 @@ plt.grid()
 plt.subplot(122)
 for i in speedups:
     plt.plot(threads, i,"r", alpha=0.3)
-plt.plot(threads, mean_speedups, "b")
+plt.plot(threads, mean_speedups, "b", label="Mean speedup")
+plt.plot(threads, amdahl(0.579, threads), "g--", label="Amdahl's law p=0.579")
+plt.plot(threads, amdahl(0.231, threads), "y--", label="Amdahl's law p=0.231")
+plt.legend()
 plt.title("Speedup")
 plt.xlabel("Number of threads")
 plt.ylabel("Speedup")

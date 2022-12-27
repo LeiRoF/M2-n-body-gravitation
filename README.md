@@ -2,6 +2,8 @@
 
 ## 🔌 Installation
 
+> ⚠️ This project is only available on Linux (tested on Ubuntu 20.04), sorry normal people.
+
 First, you need to install by yourself:
 - [Python3](https://www.python.org/downloads/)
 - [Git](https://git-scm.com/downloads)
@@ -54,3 +56,4 @@ That's it!
         python plot_speedup.py
         ```
 
+All the results are saved in the `data` folder.
