@@ -36,7 +36,7 @@ That's it!
    1. Run the program once, with all threads
 
         ```bash
-        python run.sh
+        ./run.sh
         ```
     2. Plot the evolution
     
@@ -48,7 +48,7 @@ That's it!
     1. Run the program with all threads
 
         ```bash
-        python run_speedup.sh
+        ./run_speedup.sh
         ```
     2. Plot the speedup
     
