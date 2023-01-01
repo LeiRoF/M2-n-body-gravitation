@@ -1,8 +1,5 @@
 logs/
 venv/
 __pycache__/
-code_barnabe/
-code_enzo/
-code_and_plots/
 .vscode/
 data/
